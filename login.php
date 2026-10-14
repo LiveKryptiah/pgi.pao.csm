@@ -137,43 +137,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             background: radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%);
         }
 
-        /* GREETINGS SUN ART (FROM DASHBOARD GREETING SECTION) */
-        .login-left-sun-art {
-            position: absolute;
-            right: 0;
-            bottom: -15px;
-            height: 52%;
-            max-height: 480px;
-            pointer-events: none;
-            user-select: none;
-            z-index: 1;
-            opacity: 0.88;
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
-        }
-
-        .login-left-sun-img {
-            height: 100%;
-            width: auto;
-            object-fit: contain;
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            filter: drop-shadow(0 6px 30px rgba(245, 158, 11, 0.25));
-            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-
-        .login-split-left:hover .login-left-sun-img {
-            transform: scale(1.025) rotate(-0.5deg);
-        }
-
-        [data-bs-theme="dark"] .login-left-sun-art {
-            opacity: 0.70;
-            filter: drop-shadow(0 0 35px rgba(245, 158, 11, 0.35));
-        }
-
         .login-left-content {
             position: relative;
             z-index: 2;
@@ -255,50 +218,92 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         .brand-feature-grid {
             display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 16px;
-            max-width: 480px;
+            max-width: 520px;
         }
 
-        .brand-feature-card {
+        /* FROSTED BLUR CARD (MATCHING USER REFERENCE DESIGN) */
+        .brand-blur-card {
+            background: rgba(255, 255, 255, 0.94);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.65);
+            border-radius: 24px;
+            padding: 24px 24px 22px;
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.08);
+            transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease, background 0.2s ease;
             display: flex;
-            align-items: center;
-            gap: 16px;
-            padding: 14px 18px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.14);
-            border-radius: 14px;
-            backdrop-filter: blur(8px);
-            transition: background 0.2s ease, transform 0.2s ease;
+            flex-direction: column;
+            align-items: flex-start;
+            text-align: left;
         }
 
-        .brand-feature-card:hover {
-            background: rgba(255, 255, 255, 0.12);
-            transform: translateX(4px);
+        .brand-blur-card:hover {
+            transform: translateY(-4px);
+            background: #ffffff;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
         }
 
-        .brand-feature-card i {
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.15);
+        .blur-card-icon-box {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: #111111;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.25rem;
-            color: #6ee7b7;
+            color: #ffffff;
+            font-size: 1.35rem;
+            margin-bottom: 18px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transition: transform 0.2s ease;
             flex-shrink: 0;
         }
 
-        .brand-feature-card strong {
-            display: block;
-            font-size: 0.90rem;
-            font-weight: 700;
-            color: #ffffff;
+        .brand-blur-card:hover .blur-card-icon-box {
+            transform: scale(1.06);
         }
 
-        .brand-feature-card span {
-            font-size: 0.78rem;
-            color: rgba(255, 255, 255, 0.75);
+        .blur-card-title {
+            font-size: 1.45rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+            color: #0a0a0a;
+            margin: 0 0 8px 0;
+            line-height: 1.15;
+        }
+
+        .blur-card-desc {
+            font-size: 0.85rem;
+            line-height: 1.5;
+            color: #555555;
+            margin: 0;
+            font-weight: 450;
+        }
+
+        [data-bs-theme="dark"] .brand-blur-card {
+            background: rgba(10, 24, 18, 0.82);
+            border-color: rgba(255, 255, 255, 0.14);
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6);
+        }
+
+        [data-bs-theme="dark"] .brand-blur-card:hover {
+            background: rgba(14, 32, 24, 0.92);
+        }
+
+        [data-bs-theme="dark"] .blur-card-icon-box {
+            background: #020704;
+            color: #34d399;
+            border: 1px solid rgba(52, 211, 153, 0.25);
+        }
+
+        [data-bs-theme="dark"] .blur-card-title {
+            color: #f8fafc;
+        }
+
+        [data-bs-theme="dark"] .blur-card-desc {
+            color: rgba(255, 255, 255, 0.72);
         }
 
         .login-left-footer {
@@ -575,13 +580,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             .login-left-footer {
                 display: none;
             }
-            .login-left-sun-art {
-                opacity: 0.28;
-                right: -25px;
-                bottom: -15px;
-                height: 44%;
-                max-height: 240px;
-            }
             .login-split-right {
                 flex: none;
                 width: 100%;
@@ -602,12 +600,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <!-- LEFT: FULL SCREEN BACKGROUND & BRANDING -->
     <aside class="login-split-left">
         <div class="login-left-bg-art" aria-hidden="true"></div>
-
-        <!-- GREETINGS SUN ART (FROM DASHBOARD GREETING SECTION) -->
-        <div class="login-left-sun-art" aria-hidden="true">
-            <img src="greetings_sun_topleft.png" alt="Greeting Sun" class="login-left-sun-img">
-        </div>
-
         <div class="login-left-content">
             <!-- Header Brand -->
             <div class="login-left-header">
@@ -632,26 +624,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 </p>
 
                 <div class="brand-feature-grid">
-                    <div class="brand-feature-card">
-                        <i class="ph-bold ph-chart-line-up"></i>
-                        <div>
-                            <strong>Real-Time Analytics</strong>
-                            <span>Live trend scoring & satisfaction indicators</span>
+                    <div class="brand-blur-card">
+                        <div class="blur-card-icon-box">
+                            <i class="ph-bold ph-chart-line-up"></i>
                         </div>
+                        <h3 class="blur-card-title">Analytics.</h3>
+                        <p class="blur-card-desc">
+                            Live trend scoring, satisfaction indicators.<br>
+                            Responsive, accessible and verified metrics.
+                        </p>
                     </div>
-                    <div class="brand-feature-card">
-                        <i class="ph-bold ph-chat-teardrop-text"></i>
-                        <div>
-                            <strong>Citizen Feedback</strong>
-                            <span>Automated suggestion tracking & insights</span>
+
+                    <div class="brand-blur-card">
+                        <div class="blur-card-icon-box">
+                            <i class="ph-bold ph-chat-teardrop-text"></i>
                         </div>
-                    </div>
-                    <div class="brand-feature-card">
-                        <i class="ph-bold ph-printer"></i>
-                        <div>
-                            <strong>Official Reports</strong>
-                            <span>Print-ready CSM matrices & bulk data encoding</span>
-                        </div>
+                        <h3 class="blur-card-title">Feedback.</h3>
+                        <p class="blur-card-desc">
+                            Citizen suggestions and dimension ratings.<br>
+                            Automated tracking and official reports.
+                        </p>
                     </div>
                 </div>
             </div>
