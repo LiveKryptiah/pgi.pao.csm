@@ -12,7 +12,7 @@ $path = parse_url($uri, PHP_URL_PATH);
 $path = trim($path, '/');
 
 // 1. Root / Index
-if ($path === '' || $path === 'index' || $path === 'index.php') {
+if ($path === '' || $path === 'index' || $path === 'index.php' || $path === 'api/index.php' || $path === 'api/index' || $path === 'api') {
     require $baseDir . '/index.php';
     exit;
 }
