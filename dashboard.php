@@ -828,9 +828,8 @@ $js_muni_data     = json_encode(array_values($municipality_tally));
         .pill-slate   { background-color: #ebf5ee; color: #2f4a3b; border: 1px solid #dcebe1; }
         .pill-rose    { background-color: #fef2f2; color: #991b1b; border: 1px solid #fee2e2; }
 
-        /* MINIMAL GREETINGS & CALENDAR SECTION CARDS */
-        .card-greetings,
-        .card-calendar {
+        /* MINIMAL GREETINGS SECTION CARD */
+        .card-greetings {
             background: var(--bg-surface);
             border: 1px solid var(--border-subtle);
             border-radius: var(--radius-card);
@@ -1143,15 +1142,104 @@ $js_muni_data     = json_encode(array_values($municipality_tally));
             }
         }
 
-        /* CALENDAR CARD STYLES (EXPANDED PROPORTIONS) */
+        /* ==========================================================================
+           SEAMLESS GRADIENT CARD (GRADIENT FADE TO CANVAS / BOTTOM BLEED)
+           Leverages vertical contrast falloff to softly dissolve into the page canvas:
+           1. Top surface has crisp contrast & subtle top-edge highlight.
+           2. Multi-stop gradient seamlessly blends into the canvas background at the bottom.
+           3. Fading border gently dissolves to 0% opacity towards the bottom (no hard cutoff).
+           4. Suppressed bottom shadow so the bottom boundary bleeds directly into the canvas.
+           ========================================================================== */
         .card-calendar {
-            background: var(--bg-surface);
-            border: 1px solid var(--border-subtle);
+            position: relative;
+            background: linear-gradient(180deg, 
+                #ffffff 0%, 
+                #ffffff 28%, 
+                rgba(255, 255, 255, 0.85) 55%, 
+                rgba(248, 250, 252, 0.90) 80%, 
+                #f8fafc 100%);
+            border: 1px solid rgba(226, 232, 240, 0.9);
+            border-bottom: 1px solid transparent;
             border-radius: var(--radius-card);
-            box-shadow: var(--shadow-card);
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02), inset 0 1px 0 rgba(255, 255, 255, 0.9);
             padding: 24px 26px;
-            transition: all 0.2s ease;
             min-height: 380px;
+            transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
+            overflow: hidden;
+        }
+
+        /* Border fade-out trick: 1px border that dissolves towards 0% at the bottom */
+        .card-calendar::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(180deg, 
+                rgba(226, 232, 240, 0.95) 0%, 
+                rgba(226, 232, 240, 0.65) 45%, 
+                rgba(226, 232, 240, 0.15) 80%, 
+                transparent 100%);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Ensure all interactive calendar content sits cleanly above gradient masks */
+        .card-calendar > * {
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Soft gradient divider for calendar footer so it dissolves naturally */
+        .card-calendar .calendar-footer {
+            border-top: none !important;
+            position: relative;
+            padding-top: 10px;
+        }
+        .card-calendar .calendar-footer::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 5%;
+            right: 5%;
+            height: 1px;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                rgba(226, 232, 240, 0.8) 25%, 
+                rgba(226, 232, 240, 0.8) 75%, 
+                transparent 100%);
+        }
+
+        /* DARK MODE: Seamless Fade to Dark Canvas (#07110c) */
+        [data-bs-theme="dark"] .card-calendar {
+            background: linear-gradient(180deg, 
+                #11231a 0%, 
+                #0e1e16 30%, 
+                rgba(13, 26, 19, 0.82) 60%, 
+                rgba(7, 17, 12, 0.92) 84%, 
+                #07110c 100%);
+            border: 1px solid rgba(27, 47, 36, 0.85);
+            border-bottom: 1px solid transparent;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        }
+
+        [data-bs-theme="dark"] .card-calendar::before {
+            background: linear-gradient(180deg, 
+                rgba(35, 62, 48, 0.95) 0%, 
+                rgba(27, 47, 36, 0.6) 45%, 
+                rgba(27, 47, 36, 0.15) 80%, 
+                transparent 100%);
+        }
+
+        [data-bs-theme="dark"] .card-calendar .calendar-footer::before {
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                rgba(27, 47, 36, 0.75) 25%, 
+                rgba(27, 47, 36, 0.75) 75%, 
+                transparent 100%);
         }
 
         .calendar-month-title {
@@ -1249,7 +1337,12 @@ $js_muni_data     = json_encode(array_values($municipality_tally));
         }
 
         .cal-cell:hover:not(.today):not(.other-month) {
-            background-color: var(--bg-body);
+            background-color: rgba(4, 120, 87, 0.08);
+            color: var(--primary);
+        }
+        [data-bs-theme="dark"] .cal-cell:hover:not(.today):not(.other-month) {
+            background-color: rgba(16, 185, 129, 0.12);
+            color: #34d399;
         }
 
         .cal-cell .cal-dot {
@@ -1277,9 +1370,8 @@ $js_muni_data     = json_encode(array_values($municipality_tally));
         .cal-legend-today { background-color: var(--primary); }
         .cal-legend-active { background-color: #10b981; }
 
-        /* DARK MODE SUPPORT FOR GREETINGS & CALENDAR */
-        [data-bs-theme="dark"] .card-greetings,
-        [data-bs-theme="dark"] .card-calendar {
+        /* DARK MODE SUPPORT FOR GREETINGS */
+        [data-bs-theme="dark"] .card-greetings {
             background: var(--bg-surface);
             border-color: var(--border-subtle);
         }
@@ -2031,7 +2123,7 @@ $js_muni_data     = json_encode(array_values($municipality_tally));
                     <div class="calendar-days-grid" id="calDaysGrid"></div>
 
                     <!-- Footer / Legend -->
-                    <div class="calendar-footer pt-2 mt-2 border-top d-flex align-items-center justify-content-between">
+                    <div class="calendar-footer pt-2 mt-2 d-flex align-items-center justify-content-between">
                         <div class="d-flex align-items-center gap-2 small text-muted">
                             <span class="d-inline-flex align-items-center gap-1">
                                 <span class="cal-legend-dot cal-legend-today"></span> Today
