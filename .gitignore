@@ -1,0 +1,9 @@
+# Archives & Backups
+csm
+*.zip
+
+# OS & Temp Files
+.DS_Store
+Thumbs.db
+*.log
+files for your website should be uploaded here!

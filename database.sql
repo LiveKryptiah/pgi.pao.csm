@@ -1,0 +1,24 @@
+CREATE DATABASE IF NOT EXISTS csm_isabela;
+USE csm_isabela;
+
+CREATE TABLE IF NOT EXISTS responses (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    survey_date DATE NOT NULL,
+    client_type VARCHAR(50) NOT NULL,
+    gender VARCHAR(20) NOT NULL,
+    age_group VARCHAR(20) NOT NULL,
+    transaction_type VARCHAR(100) NOT NULL,
+    cc1 VARCHAR(255) NOT NULL,
+    cc2 VARCHAR(50) NOT NULL,
+    cc3 VARCHAR(50) NOT NULL,
+    sqd0 VARCHAR(50) NOT NULL,
+    sqd1 VARCHAR(50) NOT NULL,
+    sqd2 VARCHAR(50) NOT NULL,
+    sqd3 VARCHAR(50) NOT NULL,
+    sqd4 VARCHAR(50) NOT NULL,
+    sqd5 VARCHAR(50) NOT NULL,
+    sqd7 VARCHAR(50) NOT NULL,
+    sqd8 VARCHAR(50) NOT NULL,
+    suggestions TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
