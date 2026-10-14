@@ -1946,9 +1946,6 @@ $js_muni_data     = json_encode(array_values($municipality_tally));
     <a class="nav-link" data-target="sec-export">
         <i class="ph-bold ph-file-arrow-down"></i> Export & Reports
     </a>
-    <a href="admin_bulk.php" class="nav-link">
-        <i class="ph-bold ph-sparkle"></i> Bulk Auto-Encoder
-    </a>
     <a href="index.php" target="_blank" class="nav-link">
         <i class="ph-bold ph-arrow-square-out"></i> Open Survey Form
     </a>
