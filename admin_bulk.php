@@ -96,13 +96,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['wipe_month_data'])) {
     }
 }
 
-// Retrieve distinct months with record tallies for the Wipe Month selector
-$month_tallies = [];
-try {
-    $mt_stmt = $pdo->query("SELECT DATE_FORMAT(survey_date, '%Y-%m') as ym, DATE_FORMAT(survey_date, '%M %Y') as m_label, COUNT(*) as total_cnt, SUM(CASE WHEN control_number LIKE '%B' OR control_number LIKE 'BLK-%' THEN 1 ELSE 0 END) as bulk_cnt FROM responses WHERE survey_date IS NOT NULL AND CAST(survey_date AS VARCHAR) NOT IN ('', '0000-00-00') GROUP BY ym, m_label ORDER BY ym DESC");
-    $month_tallies = $mt_stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (Exception $e) {}
-
 // 3. HANDLE BULK SUBMISSION (Single JSON payload bypasses PHP max_input_vars limit entirely)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['bulk_json']) || isset($_POST['survey_date']))) {
     try {
@@ -212,6 +205,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['bulk_json']) || iss
         $error_msg = "Database Error: " . $e->getMessage();
     }
 }
+
+// 4. RETRIEVE MONTH TALLIES (Executed after all POST operations so tallies immediately reflect new records)
+$month_tallies = [];
+try {
+    $mt_stmt = $pdo->query("SELECT DATE_FORMAT(survey_date, '%Y-%m') as ym, DATE_FORMAT(survey_date, '%M %Y') as m_label, COUNT(*) as total_cnt, SUM(CASE WHEN control_number LIKE '%B' OR control_number LIKE 'BLK-%' THEN 1 ELSE 0 END) as bulk_cnt FROM responses WHERE survey_date IS NOT NULL AND survey_date != '0000-00-00' GROUP BY ym, m_label ORDER BY ym DESC");
+    $month_tallies = $mt_stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -485,105 +485,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['bulk_json']) || iss
             border-color: #cbd5e1;
         }
 
-        /* EXCEL-LIKE SPREADSHEET GRID */
-        .grid-container {
-            overflow-x: auto;
-            max-height: 560px;
+        /* SUMMARY TABLE STYLING */
+        .summary-table-container {
             border: 1px solid var(--border-subtle);
             border-radius: 12px;
+            overflow-x: auto;
             background: #ffffff;
         }
 
-        .table-grid {
-            width: max-content;
-            min-width: 100%;
+        .summary-table {
+            width: 100%;
             margin-bottom: 0;
-            border-collapse: separate;
-            border-spacing: 0;
+            border-collapse: collapse;
         }
 
-        .table-grid thead th {
+        .summary-table thead th {
             background: #f8fafc;
             color: var(--text-muted);
-            position: sticky;
-            top: 0;
-            z-index: 2;
-            border-bottom: 1px solid var(--border-subtle);
-            border-right: 1px solid var(--border-light);
-            font-size: 0.72rem;
+            font-size: 0.75rem;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            padding: 12px 18px;
+            border-bottom: 1px solid var(--border-subtle);
             white-space: nowrap;
-            padding: 11px 8px;
-            text-align: center;
         }
 
-        .table-grid thead th:last-child {
-            border-right: none;
-        }
-
-        .table-grid tbody td {
-            padding: 5px 6px;
+        .summary-table tbody td {
+            padding: 14px 18px;
             border-bottom: 1px solid var(--border-light);
-            border-right: 1px solid var(--border-light);
             vertical-align: middle;
-            background: #ffffff;
+            color: var(--text-heading);
+            font-size: 0.88rem;
         }
 
-        .table-grid tbody tr:hover td {
+        .summary-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .summary-table tbody tr:hover td {
             background-color: #fbfcfe;
         }
 
-        .table-grid thead th.th-sqd0 {
-            background-color: #ecfdf5 !important;
-            color: #065f46 !important;
-            border-bottom: 1px solid #d1fae5;
-        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .spin { animation: spin 1s linear infinite; display: inline-block; }
 
-        .table-grid tbody td.td-sqd0 {
-            background-color: #f0fdf4 !important;
+        /* Dark mode overrides for summary table */
+        [data-bs-theme="dark"] .summary-table-container {
+            background: var(--bg-surface);
+            border-color: var(--border-subtle);
         }
-
-        .table-grid select, 
-        .table-grid input {
-            border: 1px solid transparent;
-            background: #f8fafc;
-            font-size: 0.82rem;
-            font-weight: 500;
-            color: var(--text-heading);
-            padding: 5px 8px;
-            border-radius: 6px;
-            width: 100%;
-            transition: all 0.15s ease;
-            outline: none;
-        }
-
-        .table-grid select:focus, 
-        .table-grid input:focus {
-            border-color: var(--primary);
-            background: #ffffff;
-            box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12);
-        }
-
-        .table-grid input[readonly] {
-            background: transparent;
+        [data-bs-theme="dark"] .summary-table thead th {
+            background: rgba(0, 0, 0, 0.2);
             color: var(--text-muted);
-            cursor: not-allowed;
-            border: none;
+            border-bottom-color: var(--border-subtle);
         }
-
-        .col-action { width: 44px; text-align: center; }
-        .col-date   { width: 140px; }
-        .col-client { width: 130px; }
-        .col-gender { width: 105px; }
-        .col-age    { width: 100px; }
-        .col-reg    { width: 105px; }
-        .col-prov   { width: 95px; }
-        .col-muni   { width: 160px; }
-        .col-trans  { width: 220px; }
-        .col-score  { width: 68px; text-align: center; }
-        .col-sqd0   { width: 85px; text-align: center; }
+        [data-bs-theme="dark"] .summary-table tbody td {
+            border-bottom-color: var(--border-light);
+            color: var(--text-heading);
+        }
+        [data-bs-theme="dark"] .summary-table tbody tr:hover td {
+            background-color: rgba(255, 255, 255, 0.03);
+        }
 
         /* FORM CONTROLS IN SMART PANEL */
         .form-control-sm, .form-select-sm {
@@ -720,16 +683,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['bulk_json']) || iss
                         <i class="ph-bold ph-sparkle"></i>
                     </div>
                     <div>
-                        <h6 class="card-title-clean">Smart Date Randomizer & Generator</h6>
-                        <span class="text-muted" style="font-size: 0.76rem;">Picks random Mon–Thu business days excluding official PH holidays. Suffixes record IDs with 'B'.</span>
+                        <h6 class="card-title-clean">Smart Assessment Generator</h6>
+                        <span class="text-muted" style="font-size: 0.76rem;">Directly generates and commits synthetic survey records to the database. Excludes PH holidays & weekends.</span>
                     </div>
                 </div>
                 
                 <div class="d-flex align-items-center gap-2 ms-auto flex-wrap">
-                    <button type="button" class="btn-modern-outline btn-sm py-1.5 px-3" onclick="clearAllRows()">
-                        <i class="ph-bold ph-eraser"></i> Clear Grid
-                    </button>
-
                     <button type="button" class="btn btn-sm btn-outline-danger rounded-3 fw-semibold py-1.5 px-3 d-inline-flex align-items-center gap-1.5" data-bs-toggle="modal" data-bs-target="#wipeMonthModal" title="Wipe bulk or all records for a specific month">
                         <i class="ph-bold ph-calendar-x"></i> Wipe by Month
                     </button>
@@ -742,37 +701,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['bulk_json']) || iss
                 </div>
             </div>
             
-            <div class="row g-3 align-items-end pt-2">
-                <div class="col-md-2 col-sm-6">
-                    <label class="form-label text-muted small fw-bold mb-1">Target Month</label>
-                    <input type="month" id="genMonth" class="form-control form-control-sm fw-semibold" value="<?= date('Y-m') ?>">
-                </div>
-                <div class="col-md-2 col-sm-6">
-                    <label class="form-label text-muted small fw-bold mb-1">Row Count</label>
-                    <input type="number" id="genCount" class="form-control form-control-sm fw-semibold" value="10" min="1" max="500">
-                </div>
-                <div class="col-md-2 col-sm-6">
-                    <label class="form-label text-muted small fw-bold mb-1">Client Type</label>
-                    <select id="genClient" class="form-select form-select-sm fw-semibold">
-                        <option value="Random">🎲 Randomize (Weighted)</option>
-                        <option value="Citizen">Citizen Only</option>
-                        <option value="Business">Business Only</option>
-                        <option value="Government">Government Only</option>
-                    </select>
-                </div>
-                <div class="col-md-3 col-sm-6">
-                    <label class="form-label text-muted small fw-bold mb-1">Municipality / City</label>
-                    <select id="genMuni" class="form-select form-select-sm fw-semibold">
-                        <option value="Random">🎲 Randomize (All Isabela)</option>
-                        <?php foreach ($isabelaLocations as $m): ?>
-                            <option value="<?php echo htmlspecialchars($m); ?>"><?php echo htmlspecialchars($m); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-md-3 col-sm-12">
-                    <label class="form-label text-muted small fw-bold mb-1">Transaction Type</label>
-                    <div class="d-flex gap-2">
-                        <select id="genTransaction" class="form-select form-select-sm fw-semibold flex-grow-1">
+            <form id="generatorForm" method="POST" action="admin_bulk.php">
+                <input type="hidden" name="bulk_json" id="bulkJsonInput" value="">
+                
+                <div class="row g-3 align-items-end pt-2">
+                    <div class="col-md-2 col-sm-6">
+                        <label class="form-label text-muted small fw-bold mb-1">Target Month</label>
+                        <input type="month" id="genMonth" class="form-control form-control-sm fw-semibold" value="<?= date('Y-m') ?>" required>
+                    </div>
+                    <div class="col-md-2 col-sm-6">
+                        <label class="form-label text-muted small fw-bold mb-1">Record Count</label>
+                        <input type="number" id="genCount" class="form-control form-control-sm fw-semibold" value="10" min="1" max="500" required>
+                    </div>
+                    <div class="col-md-2 col-sm-6">
+                        <label class="form-label text-muted small fw-bold mb-1">Client Type</label>
+                        <select id="genClient" class="form-select form-select-sm fw-semibold">
+                            <option value="Random">🎲 Randomize (Weighted)</option>
+                            <option value="Citizen">Citizen Only</option>
+                            <option value="Business">Business Only</option>
+                            <option value="Government">Government Only</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <label class="form-label text-muted small fw-bold mb-1">Municipality / City</label>
+                        <select id="genMuni" class="form-select form-select-sm fw-semibold">
+                            <option value="Random">🎲 Randomize (All Isabela)</option>
+                            <?php foreach ($isabelaLocations as $m): ?>
+                                <option value="<?php echo htmlspecialchars($m); ?>"><?php echo htmlspecialchars($m); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-3 col-sm-12">
+                        <label class="form-label text-muted small fw-bold mb-1">Transaction Type</label>
+                        <select id="genTransaction" class="form-select form-select-sm fw-semibold">
                             <option value="Random">🎲 Randomize (All 13 Types Evenly)</option>
                             <option value="RandomWeighted">🎲 Randomize (Weighted - Cert/Trans/Sub)</option>
                             <optgroup label="Select Specific Transaction">
@@ -781,74 +742,110 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['bulk_json']) || iss
                             <?php endforeach; ?>
                             </optgroup>
                         </select>
-                        <button type="button" class="btn-modern-primary py-1.5 px-3 flex-shrink-0" onclick="generateRandomRows()" title="Generate rows into table">
-                            <i class="ph-bold ph-lightning text-warning"></i> Generate
-                        </button>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- ENCODING GRID CARD -->
-        <div class="card-minimal">
-            <div class="card-header-clean flex-wrap gap-2">
-                <div>
-                    <h5 class="card-title-clean fs-6">Data Encoding Grid</h5>
-                    <small class="text-muted">Review generated data or manually stage rows before saving to the database.</small>
-                </div>
-                <div class="d-flex align-items-center gap-2">
-                    <span id="rowCountBadge" class="pill-badge pill-slate">0 Records Staged</span>
-                    <button type="button" class="btn-modern-outline btn-sm py-1.5 px-3" onclick="addNewRow()">
-                        <i class="ph-bold ph-plus"></i> Add Blank Row
-                    </button>
-                </div>
-            </div>
-
-            <form method="POST" action="" id="bulkForm">
-                <input type="hidden" name="bulk_json" id="bulkJson" value="">
-                <div class="grid-container mb-4">
-                    <table class="table-grid">
-                        <thead>
-                            <tr>
-                                <th class="col-action"></th>
-                                <th class="col-date">Date</th>
-                                <th class="col-client">Client Type</th>
-                                <th class="col-gender">Gender</th>
-                                <th class="col-age">Age</th>
-                                <th class="col-reg">Region</th>
-                                <th class="col-prov">Province</th>
-                                <th class="col-muni">Municipality</th>
-                                <th class="col-trans">Transaction</th>
-                                <th class="col-score" title="Citizen's Charter Knowledge">CC1</th>
-                                <th class="col-score" title="Citizen's Charter Visibility">CC2</th>
-                                <th class="col-score" title="Citizen's Charter Helpfulness">CC3</th>
-                                <th class="col-sqd0 th-sqd0" title="Overall Satisfaction (SQD0)">Overall</th>
-                                <th class="col-score" title="Responsiveness">SQD1</th>
-                                <th class="col-score" title="Reliability">SQD2</th>
-                                <th class="col-score" title="Access & Facilities">SQD3</th>
-                                <th class="col-score" title="Communication">SQD4</th>
-                                <th class="col-score" title="Costs">SQD5</th>
-                                <th class="col-score" title="Integrity">SQD6</th>
-                                <th class="col-score" title="Professionalism">SQD7</th>
-                                <th class="col-score" title="Rules & Explain">SQD8</th>
-                            </tr>
-                        </thead>
-                        <tbody id="bulkBody">
-                            <!-- Staged rows dynamically injected here -->
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="d-flex align-items-center justify-content-between pt-3 border-top flex-wrap gap-3">
+                <div class="d-flex align-items-center justify-content-between pt-3 mt-3 border-top flex-wrap gap-3">
                     <div class="d-flex align-items-center gap-2 text-muted small">
                         <i class="ph-bold ph-info text-primary fs-5"></i>
-                        <span>Generated rows will receive unique electronic control IDs (<code class="text-primary fw-bold">E{MM}-{seq}B</code>) and update dashboard metrics in real time.</span>
+                        <span>Generates realistic data with control numbers (<code class="text-primary fw-bold">E{MM}-{seq}B</code>) and saves directly to database in real time.</span>
                     </div>
-                    <button type="submit" class="btn-modern-primary btn-lg px-4 py-2.5 shadow-sm fw-bold">
-                        <i class="ph-bold ph-cloud-arrow-up fs-5"></i> Save All Records to Database
+                    <button type="submit" id="generateBtn" class="btn-modern-primary py-2 px-4 fw-bold shadow-sm d-inline-flex align-items-center gap-2">
+                        <i class="ph-bold ph-lightning text-warning fs-5"></i>
+                        <span id="generateBtnText">Generate & Save to Database</span>
                     </button>
                 </div>
             </form>
+        </div>
+
+        <!-- DATABASE RECORDS SUMMARY BY MONTH CARD -->
+        <div class="card-minimal">
+            <div class="card-header-clean flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2.5">
+                    <div class="text-primary fs-4 d-flex align-items-center">
+                        <i class="ph-bold ph-database"></i>
+                    </div>
+                    <div>
+                        <h6 class="card-title-clean">Database Records by Month</h6>
+                        <span class="text-muted" style="font-size: 0.76rem;">Current distribution of bulk-generated records versus real citizen responses.</span>
+                    </div>
+                </div>
+                
+                <?php 
+                    $total_all_records = 0;
+                    $total_bulk_records = 0;
+                    foreach ($month_tallies as $mt) {
+                        $total_all_records += (int)$mt['total_cnt'];
+                        $total_bulk_records += (int)$mt['bulk_cnt'];
+                    }
+                ?>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="pill-badge pill-slate">Total: <?= number_format($total_all_records) ?> Records</span>
+                    <span class="pill-badge pill-blue">Bulk: <?= number_format($total_bulk_records) ?></span>
+                    <span class="pill-badge pill-emerald">Real: <?= number_format(max(0, $total_all_records - $total_bulk_records)) ?></span>
+                </div>
+            </div>
+
+            <?php if (!empty($month_tallies)): ?>
+                <div class="summary-table-container">
+                    <table class="summary-table">
+                        <thead>
+                            <tr>
+                                <th>Target Month</th>
+                                <th class="text-center">Bulk Generated</th>
+                                <th class="text-center">Real Citizen</th>
+                                <th class="text-center">Total Records</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($month_tallies as $mt): 
+                                $bulkCount = (int)$mt['bulk_cnt'];
+                                $totalCount = (int)$mt['total_cnt'];
+                                $realCount = max(0, $totalCount - $bulkCount);
+                            ?>
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <i class="ph-bold ph-calendar text-muted fs-6"></i>
+                                            <span class="fw-bold text-dark"><?= htmlspecialchars($mt['m_label']) ?></span>
+                                            <span class="text-muted small">(<?= htmlspecialchars($mt['ym']) ?>)</span>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="pill-badge pill-blue fw-bold">
+                                            <?= number_format($bulkCount) ?> records
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="pill-badge pill-emerald fw-bold">
+                                            <?= number_format($realCount) ?> records
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="pill-badge pill-slate fw-bold">
+                                            <?= number_format($totalCount) ?> total
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        <button type="button" class="btn btn-sm btn-outline-danger rounded-3 py-1 px-2.5 d-inline-flex align-items-center gap-1.5 fw-semibold" onclick="openWipeForMonth('<?= htmlspecialchars($mt['ym']) ?>')" title="Wipe records for <?= htmlspecialchars($mt['m_label']) ?>">
+                                            <i class="ph-bold ph-calendar-x"></i> Wipe Month
+                                        </button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php else: ?>
+                <div class="text-center py-5">
+                    <div class="text-muted fs-1 mb-2">
+                        <i class="ph-bold ph-tray"></i>
+                    </div>
+                    <h6 class="fw-bold text-dark">No Survey Records in Database</h6>
+                    <p class="text-muted small mb-0">Use the Smart Assessment Generator above to generate test or bulk records.</p>
+                </div>
+            <?php endif; ?>
         </div>
     </div>
 </div>
@@ -930,8 +927,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['bulk_json']) || iss
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-    let rowCount = 0;
-
     const clientChoices = ["Citizen", "Business", "Government"];
     const isabelaLocations = [
         "Alicia", "Angadanan", "Aurora", "Benito Soliven", "Burgos", "Cabagan", "Cabatuan", "Cauayan City", "Cordon", "Delfin Albano", 
@@ -955,10 +950,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['bulk_json']) || iss
         "TMCR/Section Map/s",
         "Posting"
     ];
-
-    function getSelectOptions(optionsArray, selectedValue) {
-        return optionsArray.map(opt => `<option value="${opt}" ${opt === selectedValue ? 'selected' : ''}>${opt}</option>`).join('');
-    }
 
     // DATE RANDOMIZER LOGIC (Excludes Holidays, Fri, Sat, Sun)
     function getRandomValidDate(year, monthIndex) {
@@ -1012,21 +1003,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['bulk_json']) || iss
         return others[Math.floor(Math.random() * others.length)];
     }
 
-    function addNewRow() {
-        const today = new Date().toISOString().split('T')[0];
-        injectRowHtml(today, "Citizen", "Male", "20-29", "Ilagan City", "Transfer", "3", "3", "3", "5", "5", "5", "5", "5", "5", "5", "5", "5");
-    }
+    // DIRECT GENERATOR & DATABASE SUBMISSION
+    $('#generatorForm').on('submit', function(e) {
+        e.preventDefault();
 
-    function generateRandomRows() {
-        const count = parseInt(document.getElementById('genCount').value) || 10;
-        const monthVal = document.getElementById('genMonth').value; // e.g. "2026-10"
-        const clientMode = document.getElementById('genClient').value;
-        const transMode = document.getElementById('genTransaction').value;
-        const muniMode = document.getElementById('genMuni').value;
+        const count = parseInt($('#genCount').val()) || 10;
+        const monthVal = $('#genMonth').val(); // e.g. "2026-10"
+        const clientMode = $('#genClient').val();
+        const transMode = $('#genTransaction').val();
+        const muniMode = $('#genMuni').val();
 
         if (!monthVal) {
             alert('Please select a Target Month first.');
-            return;
+            return false;
+        }
+
+        if (count < 1 || count > 500) {
+            alert('Please enter a record count between 1 and 500.');
+            return false;
         }
 
         const year = parseInt(monthVal.split('-')[0]);
@@ -1037,19 +1031,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['bulk_json']) || iss
         const ccScores = ["3", "4"];
         const sqdScores = ["4", "5"];
 
-        for(let i = 0; i < count; i++) {
+        const records = [];
+        for (let i = 0; i < count; i++) {
             const rDate = getRandomValidDate(year, monthIndex);
             const rClient = clientMode === "Random" ? getWeightedClient() : clientMode;
             
-            // Transaction mode resolution
             let rTrans;
             if (transMode === "Random") {
-                // Distribute evenly across ALL 13 transaction types
                 rTrans = transactionTypes[Math.floor(Math.random() * transactionTypes.length)];
             } else if (transMode === "RandomWeighted") {
                 rTrans = getWeightedTransaction();
             } else {
-                // User explicitly selected one of the 13 specific transaction types
                 rTrans = transMode;
             }
 
@@ -1059,127 +1051,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['bulk_json']) || iss
             const getRandSqd = () => sqdScores[Math.floor(Math.random() * sqdScores.length)];
             const getRandCc = () => ccScores[Math.floor(Math.random() * ccScores.length)];
 
-            injectRowHtml(
-                rDate, rClient, rGender, rAge, rMuni, rTrans, 
-                getRandCc(), getRandCc(), getRandCc(), 
-                getRandSqd(), getRandSqd(), getRandSqd(), getRandSqd(), getRandSqd(), getRandSqd(), getRandSqd(), getRandSqd(), getRandSqd()
-            );
-        }
-    }
-
-    function injectRowHtml(date, client, gender, age, muni, trans, cc1, cc2, cc3, s0, s1, s2, s3, s4, s5, s6, s7, s8) {
-        rowCount++;
-        updateCounter();
-        
-        const sqdChoices = ["5", "4", "3", "N/A"];
-        const ccChoices = ["1", "2", "3", "4"];
-        const genderChoices = ["Male", "Female"];
-        const ageChoices = ["15-19", "20-29", "30-39", "40-49", "50-59", "60+"];
-        
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td class="col-action">
-                <button type="button" class="btn btn-sm btn-link text-danger p-0" title="Delete Row" onclick="removeRow(this)">
-                    <i class="ph-bold ph-trash fs-6"></i>
-                </button>
-            </td>
-            <td class="col-date"><input type="date" class="row-in in-date" value="${date}" required></td>
-            
-            <td class="col-client"><select class="row-in in-client">${getSelectOptions(clientChoices, client)}</select></td>
-            <td class="col-gender"><select class="row-in in-gender">${getSelectOptions(genderChoices, gender)}</select></td>
-            <td class="col-age"><select class="row-in in-age">${getSelectOptions(ageChoices, age)}</select></td>
-            <td class="col-reg"><input type="text" class="row-in in-reg" value="Region II" readonly></td>
-            <td class="col-prov"><input type="text" class="row-in in-prov" value="Isabela" readonly></td>
-            
-            <td class="col-muni"><select class="row-in in-muni">${getSelectOptions(isabelaLocations, muni)}</select></td>
-            <td class="col-trans"><select class="row-in in-trans">${getSelectOptions(transactionTypes, trans)}</select></td>
-            
-            <td class="col-score"><select class="row-in in-cc1">${getSelectOptions(ccChoices, cc1)}</select></td>
-            <td class="col-score"><select class="row-in in-cc2">${getSelectOptions(ccChoices, cc2)}</select></td>
-            <td class="col-score"><select class="row-in in-cc3">${getSelectOptions(ccChoices, cc3)}</select></td>
-            
-            <td class="col-sqd0 td-sqd0"><select class="row-in in-sqd0 fw-bold text-success">${getSelectOptions(sqdChoices, s0)}</select></td>
-            <td class="col-score"><select class="row-in in-sqd1">${getSelectOptions(sqdChoices, s1)}</select></td>
-            <td class="col-score"><select class="row-in in-sqd2">${getSelectOptions(sqdChoices, s2)}</select></td>
-            <td class="col-score"><select class="row-in in-sqd3">${getSelectOptions(sqdChoices, s3)}</select></td>
-            <td class="col-score"><select class="row-in in-sqd4">${getSelectOptions(sqdChoices, s4)}</select></td>
-            <td class="col-score"><select class="row-in in-sqd5">${getSelectOptions(sqdChoices, s5)}</select></td>
-            <td class="col-score"><select class="row-in in-sqd6">${getSelectOptions(sqdChoices, s6)}</select></td>
-            <td class="col-score"><select class="row-in in-sqd7">${getSelectOptions(sqdChoices, s7)}</select></td>
-            <td class="col-score"><select class="row-in in-sqd8">${getSelectOptions(sqdChoices, s8)}</select></td>
-        `;
-        document.getElementById('bulkBody').appendChild(tr);
-    }
-
-    function removeRow(btn) {
-        btn.closest('tr').remove();
-        rowCount--;
-        updateCounter();
-    }
-
-    function clearAllRows() {
-        document.getElementById('bulkBody').innerHTML = '';
-        rowCount = 0;
-        updateCounter();
-    }
-
-    function updateCounter() {
-        const badge = document.getElementById('rowCountBadge');
-        const text = rowCount === 1 ? "1 Record Staged" : `${rowCount} Records Staged`;
-        badge.innerText = text;
-        if (rowCount > 0) {
-            badge.className = "pill-badge pill-emerald";
-        } else {
-            badge.className = "pill-badge pill-slate";
-        }
-    }
-
-    // FORM SUBMISSION: BUNDLE ALL STAGED ROWS INTO SINGLE JSON PAYLOAD
-    $('#bulkForm').on('submit', function(e) {
-        const rows = $('#bulkBody tr');
-        if (rows.length === 0) {
-            e.preventDefault();
-            alert('No staged records found. Please generate or add rows first.');
-            return false;
-        }
-
-        const records = [];
-        rows.each(function() {
-            const tr = $(this);
             records.push({
-                survey_date:      tr.find('.in-date').val() || '',
-                client_type:      tr.find('.in-client').val() || 'Citizen',
-                gender:           tr.find('.in-gender').val() || 'Male',
-                age_group:        tr.find('.in-age').val() || '20-29',
-                region:           tr.find('.in-reg').val() || 'Region II',
-                province:         tr.find('.in-prov').val() || 'Isabela',
-                municipality:     tr.find('.in-muni').val() || 'Ilagan City',
-                transaction_type: tr.find('.in-trans').val() || 'Certification/CTC/CPC',
-                cc1:              tr.find('.in-cc1').val() || '3',
-                cc2:              tr.find('.in-cc2').val() || '3',
-                cc3:              tr.find('.in-cc3').val() || '3',
-                sqd0:             tr.find('.in-sqd0').val() || '5',
-                sqd1:             tr.find('.in-sqd1').val() || '5',
-                sqd2:             tr.find('.in-sqd2').val() || '5',
-                sqd3:             tr.find('.in-sqd3').val() || '5',
-                sqd4:             tr.find('.in-sqd4').val() || '5',
-                sqd5:             tr.find('.in-sqd5').val() || '5',
-                sqd6:             tr.find('.in-sqd6').val() || '5',
-                sqd7:             tr.find('.in-sqd7').val() || '5',
-                sqd8:             tr.find('.in-sqd8').val() || '5'
+                survey_date:      rDate,
+                client_type:      rClient,
+                gender:           rGender,
+                age_group:        rAge,
+                region:           'Region II',
+                province:         'Isabela',
+                municipality:     rMuni,
+                transaction_type: rTrans,
+                cc1:              getRandCc(),
+                cc2:              getRandCc(),
+                cc3:              getRandCc(),
+                sqd0:             getRandSqd(),
+                sqd1:             getRandSqd(),
+                sqd2:             getRandSqd(),
+                sqd3:             getRandSqd(),
+                sqd4:             getRandSqd(),
+                sqd5:             getRandSqd(),
+                sqd6:             getRandSqd(),
+                sqd7:             getRandSqd(),
+                sqd8:             getRandSqd()
             });
-        });
+        }
 
-        $('#bulkJson').val(JSON.stringify(records));
-        
-        // Remove name attributes from any table inputs just in case to ensure 
-        // the browser sends ONLY the single bulk_json variable
-        $('#bulkBody').find('input, select').removeAttr('name');
+        $('#bulkJsonInput').val(JSON.stringify(records));
 
-        const btn = $(this).find('button[type="submit"]');
-        btn.css('pointer-events', 'none').css('opacity', '0.75').html('<i class="ph-bold ph-spinner-gap me-2"></i> Saving Records...');
-        return true;
+        const btn = $('#generateBtn');
+        btn.prop('disabled', true).css('opacity', '0.8');
+        $('#generateBtnText').text('Generating & Saving ' + count + ' Records...');
+        btn.find('i').removeClass('ph-lightning text-warning').addClass('ph-spinner-gap spin');
+
+        HTMLFormElement.prototype.submit.call(this);
     });
+
+    function openWipeForMonth(ym) {
+        if (ym) {
+            syncWipeMonthSelect(ym);
+            syncWipeMonthInput(ym);
+            const modalEl = document.getElementById('wipeMonthModal');
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
+    }
 
     // WIPE DATA BY MONTH HELPERS
     function syncWipeMonthInput(val) {
