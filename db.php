@@ -35,12 +35,13 @@ if (extension_loaded('pdo_pgsql') && $database_url) {
             PDO::ATTR_TIMEOUT => 5
         ]);
     } catch (Throwable $e) {
+        $pg_error = $e->getMessage();
         $pdo = null;
     }
 }
 
 // Fallback to local MySQL if PostgreSQL is not available
-if (!$pdo && extension_loaded('pdo_mysql')) {
+if (!$pdo && extension_loaded('pdo_mysql') && !getenv('VERCEL')) {
     $mysqlHost = getenv('MYSQL_HOST') ?: '127.0.0.1';
     $mysqlDb   = getenv('MYSQL_DATABASE') ?: 'csm_isabela';
     $mysqlUser = getenv('MYSQL_USER') ?: 'root';
@@ -52,11 +53,11 @@ if (!$pdo && extension_loaded('pdo_mysql')) {
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
         ]);
     } catch (PDOException $e) {
-        die("Database connection failed: " . $e->getMessage());
+        die("Database connection failed: " . $e->getMessage() . " (PostgreSQL error: " . ($pg_error ?? 'none') . ")");
     }
 }
 
 if (!$pdo) {
-    die("Database connection failed: Neither PostgreSQL nor MySQL could be connected.");
+    die("Database connection failed (PostgreSQL): " . ($pg_error ?? 'Unknown error'));
 }
 ?>
