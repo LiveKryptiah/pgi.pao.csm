@@ -23,6 +23,12 @@ if (extension_loaded('pdo_pgsql') && $database_url) {
         $pgDb   = ltrim($parts['path'] ?? '/neondb', '/');
 
         $dsn = "pgsql:host=$pgHost;port=$pgPort;dbname=$pgDb;sslmode=require";
+        // Neon SNI compatibility (required by Neon when client libpq does not send SNI)
+        if (strpos($pgHost, 'neon.tech') !== false) {
+            $endpoint = explode('.', $pgHost)[0];
+            $dsn .= ";options='endpoint=$endpoint'";
+        }
+
         $pdo = new PDO($dsn, $pgUser, $pgPass, [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,

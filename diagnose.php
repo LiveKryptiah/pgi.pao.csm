@@ -39,22 +39,18 @@ $database_url = getenv('DATABASE_URL')
     ?: getenv('POSTGRES_URL') 
     ?: 'postgresql://neondb_owner:npg_gn94ZaRWDLst@ep-snowy-poetry-b8k9tp6g-pooler.c-14.us-east-1.aws.neon.tech/neondb?sslmode=require';
 
-echo "<b>Connecting to PG:</b> ";
+echo "<b>Testing require 'db.php':</b> ";
 try {
-    $parts = parse_url($database_url);
-    $pgHost = $parts['host'] ?? 'ep-snowy-poetry-b8k9tp6g-pooler.c-14.us-east-1.aws.neon.tech';
-    $pgPort = $parts['port'] ?? 5432;
-    $pgUser = $parts['user'] ?? 'neondb_owner';
-    $pgPass = $parts['pass'] ?? 'npg_gn94ZaRWDLst';
-    $pgDb   = ltrim($parts['path'] ?? '/neondb', '/');
-
-    $dsn = "pgsql:host=$pgHost;port=$pgPort;dbname=$pgDb;sslmode=require";
-    $test_pdo = new PDO($dsn, $pgUser, $pgPass, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
-    ]);
-    echo "<span style='color:green;'>✅ Connected to PostgreSQL successfully! Total rows: " . $test_pdo->query("SELECT count(*) FROM responses")->fetchColumn() . "</span><br>";
+    require 'db.php';
+    if (isset($pdo) && $pdo) {
+        $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        $count = $pdo->query("SELECT count(*) FROM responses")->fetchColumn();
+        echo "<span style='color:green;'>✅ Database Connected via '$driver'! Total responses: $count</span><br>";
+    } else {
+        echo "<span style='color:red;'>❌ \$pdo is not set</span><br>";
+    }
 } catch (Throwable $e) {
-    echo "<span style='color:red;'>❌ PostgreSQL Error: " . $e->getMessage() . "</span><br>";
+    echo "<span style='color:red;'>❌ db.php Error: " . $e->getMessage() . "</span><br>";
 }
 
 echo "</div>";
