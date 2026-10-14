@@ -283,15 +283,59 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             align-items: center;
             padding: 48px 32px;
             position: relative;
+            overflow: hidden;
         }
 
         [data-bs-theme="dark"] .login-split-right {
             background: #07110c;
         }
 
+        /* GREETINGS SUN ART (FROM DASHBOARD GREETING SECTION) */
+        .login-sun-art,
+        .login-split-right .greetings-sun-art {
+            position: absolute;
+            right: 0;
+            bottom: -5px;
+            height: 52%;
+            max-height: 380px;
+            pointer-events: none;
+            user-select: none;
+            z-index: 1;
+            opacity: 0.88;
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+        }
+
+        .login-sun-img,
+        .login-split-right .greetings-sun-img {
+            height: 100%;
+            width: auto;
+            object-fit: contain;
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            filter: drop-shadow(0 4px 20px rgba(245, 158, 11, 0.12));
+            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .login-split-right:hover .login-sun-img,
+        .login-split-right:hover .greetings-sun-img {
+            transform: scale(1.02) rotate(-0.5deg);
+        }
+
+        [data-bs-theme="dark"] .login-sun-art,
+        [data-bs-theme="dark"] .login-split-right .greetings-sun-art {
+            opacity: 0.45;
+            filter: drop-shadow(0 0 25px rgba(245, 158, 11, 0.22));
+        }
+
         .login-form-container {
             width: 100%;
             max-width: 360px;
+            position: relative;
+            z-index: 2;
             animation: formFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) backwards;
         }
 
@@ -544,6 +588,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 min-height: auto;
                 padding: 40px 24px 60px;
             }
+            .login-sun-art,
+            .login-split-right .greetings-sun-art {
+                opacity: 0.22;
+                right: -25px;
+                bottom: -15px;
+                height: 38%;
+                max-height: 220px;
+            }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -622,6 +674,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <i class="ph-bold ph-sun fs-5 theme-icon-sun d-none"></i>
             <span class="theme-label small d-none d-sm-inline fw-semibold">Dark</span>
         </button>
+
+        <!-- GREETINGS SUN ART (FROM DASHBOARD GREETING SECTION) -->
+        <div class="greetings-sun-art login-sun-art" aria-hidden="true">
+            <img src="greetings_sun_topleft.png" alt="Greeting Sun" class="greetings-sun-img login-sun-img">
+        </div>
 
         <div class="login-form-container">
             <!-- Mobile Brand Header (shown only on small screens) -->
