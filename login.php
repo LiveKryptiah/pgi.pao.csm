@@ -271,7 +271,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             padding-top: 24px;
         }
 
-        /* RIGHT: LOGIN FORM PANEL */
+        /* RIGHT: LOGIN FORM PANEL - MINIMAL MODERN */
         .login-split-right {
             flex: 1 1 48%;
             width: 48%;
@@ -281,57 +281,36 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding: 60px 48px;
+            padding: 48px 32px;
             position: relative;
         }
 
         [data-bs-theme="dark"] .login-split-right {
-            background: #09140e;
+            background: #07110c;
         }
 
         .login-form-container {
             width: 100%;
-            max-width: 420px;
-            animation: formRise 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+            max-width: 360px;
+            animation: formFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) backwards;
         }
 
-        @keyframes formRise {
-            from { opacity: 0; transform: translateY(18px); }
+        @keyframes formFadeIn {
+            from { opacity: 0; transform: translateY(10px); }
             to   { opacity: 1; transform: translateY(0); }
         }
 
-        .login-chip-status {
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: #047857;
-            background: #ecfdf5;
-            border: 1px solid #d1fae5;
-            padding: 4px 10px;
-            border-radius: 999px;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        [data-bs-theme="dark"] .login-chip-status {
-            background: rgba(16, 185, 129, 0.14);
-            border-color: rgba(16, 185, 129, 0.25);
-            color: #34d399;
-        }
-
-        .login-status-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background-color: #059669;
+        .login-header {
+            margin-bottom: 28px;
         }
 
         .login-heading {
-            font-size: 2rem;
-            font-weight: 800;
+            font-size: 1.55rem;
+            font-weight: 700;
             letter-spacing: -0.025em;
             color: var(--text-heading, #0f172a);
             margin: 0 0 6px;
+            line-height: 1.25;
         }
 
         [data-bs-theme="dark"] .login-heading {
@@ -339,67 +318,86 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
 
         .login-subheading {
-            font-size: 0.90rem;
+            font-size: 0.86rem;
             color: var(--text-muted, #64748b);
-            margin: 0 0 28px;
-            line-height: 1.5;
+            margin: 0;
+            line-height: 1.45;
+        }
+
+        .field-group {
+            margin-bottom: 18px;
         }
 
         .field-label {
-            font-size: 0.80rem;
-            font-weight: 700;
-            color: var(--text-heading, #0f172a);
-            margin-bottom: 7px;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            color: var(--text-heading, #1e293b);
+            margin-bottom: 6px;
             display: block;
         }
 
         [data-bs-theme="dark"] .field-label {
-            color: #e2e8f0;
+            color: #cbd5e1;
         }
 
-        .field-wrap { position: relative; }
+        .field-wrap {
+            position: relative;
+        }
+
         .field-wrap > .field-icon {
             position: absolute;
-            left: 15px;
+            left: 13px;
             top: 50%;
             transform: translateY(-50%);
-            font-size: 1.15rem;
+            font-size: 1.05rem;
             color: var(--text-subtle, #94a3b8);
             pointer-events: none;
-            transition: color 0.2s ease;
+            transition: color 0.15s ease;
         }
 
         .field-wrap .form-control {
-            height: 48px;
-            padding-left: 44px;
-            border-radius: 12px;
-            font-size: 0.92rem;
-            font-weight: 600;
-            background-color: var(--bg-body, #f8fafc);
+            height: 42px;
+            padding-left: 38px;
+            padding-right: 14px;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 450;
+            background-color: var(--bg-body, #ffffff);
             border: 1px solid var(--border-subtle, #e2e8f0);
             color: var(--text-heading, #0f172a);
             box-shadow: none !important;
-            transition: border-color 0.2s ease, background-color 0.2s ease;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
         }
 
         [data-bs-theme="dark"] .field-wrap .form-control {
-            background-color: #112219;
-            border-color: #1e3829;
+            background-color: #0d1a13;
+            border-color: #1b2f24;
             color: #f1f5f9;
+        }
+
+        .field-wrap .form-control::placeholder {
+            color: #94a3b8;
+            font-size: 0.84rem;
+        }
+
+        [data-bs-theme="dark"] .field-wrap .form-control::placeholder {
+            color: #5f7a6b;
         }
 
         .field-wrap .form-control:focus {
             background-color: var(--bg-surface, #ffffff);
-            border-color: #047857;
+            border-color: #059669;
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12) !important;
         }
 
         [data-bs-theme="dark"] .field-wrap .form-control:focus {
-            background-color: #14281e;
+            background-color: #0f1e16;
             border-color: #10b981;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15) !important;
         }
 
         .field-wrap:focus-within > .field-icon {
-            color: #047857;
+            color: #059669;
         }
 
         [data-bs-theme="dark"] .field-wrap:focus-within > .field-icon {
@@ -408,56 +406,62 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         .pw-toggle {
             position: absolute;
-            right: 8px;
+            right: 6px;
             top: 50%;
             transform: translateY(-50%);
             border: none;
             background: transparent;
             color: var(--text-subtle, #94a3b8);
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.15rem;
+            font-size: 1.05rem;
             cursor: pointer;
             box-shadow: none !important;
             transition: color 0.15s ease, background-color 0.15s ease;
         }
 
         .pw-toggle:hover {
-            color: #047857;
-            background: rgba(4, 120, 87, 0.08);
+            color: #059669;
+            background: rgba(5, 150, 105, 0.08);
         }
 
-        #password { padding-right: 48px; }
+        [data-bs-theme="dark"] .pw-toggle:hover {
+            color: #10b981;
+            background: rgba(16, 185, 129, 0.12);
+        }
+
+        #password { padding-right: 42px; }
 
         .btn-login {
-            height: 48px;
+            height: 42px;
             border: none;
-            border-radius: 12px;
-            background: linear-gradient(135deg, #047857 0%, #064e3b 100%);
+            border-radius: 8px;
+            background: #047857;
             color: #ffffff;
-            font-weight: 700;
-            font-size: 0.95rem;
-            box-shadow: 0 4px 14px -2px rgba(4, 120, 87, 0.35) !important;
-            transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease, filter 0.2s ease;
+            font-weight: 600;
+            font-size: 0.875rem;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+            transition: background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
         }
 
         .btn-login:hover {
-            transform: translateY(-2px);
-            filter: brightness(1.08);
-            box-shadow: 0 8px 20px -2px rgba(4, 120, 87, 0.45) !important;
+            background: #065f46;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(4, 120, 87, 0.25) !important;
             color: #ffffff;
         }
 
         .btn-login:active {
             transform: translateY(0);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
         }
 
         .btn-login:disabled {
-            opacity: 0.85;
+            opacity: 0.75;
             transform: none;
             cursor: wait;
         }
@@ -466,37 +470,37 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 12px 16px;
-            border-radius: 12px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            margin-bottom: 22px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            margin-bottom: 20px;
             color: #991b1b;
             background: #fef2f2;
             border: 1px solid #fee2e2;
-            animation: loginShake 0.4s ease;
+            animation: loginShake 0.3s ease;
         }
 
         [data-bs-theme="dark"] .login-alert {
             color: #fca5a5;
-            background: rgba(239, 68, 68, 0.12);
-            border-color: rgba(239, 68, 68, 0.3);
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.25);
         }
 
         @keyframes loginShake {
             0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-6px); }
-            75% { transform: translateX(6px); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
         }
 
         .back-link {
-            font-size: 0.85rem;
-            font-weight: 600;
+            font-size: 0.8125rem;
+            font-weight: 500;
             color: var(--text-muted, #64748b);
             text-decoration: none;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             transition: color 0.15s ease;
         }
 
@@ -622,17 +626,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <div class="login-form-container">
             <!-- Mobile Brand Header (shown only on small screens) -->
             <div class="d-lg-none text-center mb-4">
-                <img src="image_4c6ce6.jpg" alt="Logo" class="rounded-3 shadow-sm mb-2" style="width: 48px; height: 48px; object-fit: contain; background: white; padding: 4px;">
-                <h5 class="fw-bold mb-0">CSM Admin Portal</h5>
-                <span class="small text-muted">Office of the Provincial Assessor</span>
+                <img src="image_4c6ce6.jpg" alt="Logo" style="width: 42px; height: 42px; object-fit: contain; margin-bottom: 8px;">
+                <h6 class="fw-bold mb-0">CSM Admin Portal</h6>
+                <span class="text-muted" style="font-size: 0.78rem;">Office of the Provincial Assessor</span>
             </div>
 
-            <div class="mb-4">
-                <div class="login-chip-status mb-2">
-                    <span class="login-status-dot"></span> Administrator Login
-                </div>
-                <h2 class="login-heading">Welcome back</h2>
-                <p class="login-subheading">Enter your administrator credentials to access the management dashboard.</p>
+            <div class="login-header">
+                <h2 class="login-heading">Sign In</h2>
+                <p class="login-subheading">Enter your administrator credentials to continue</p>
             </div>
 
             <?php if ($error): ?>
@@ -643,23 +644,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <?php endif; ?>
 
             <form method="POST" action="login.php" id="loginForm" novalidate>
-                <div class="mb-3">
+                <div class="field-group">
                     <label class="field-label" for="username">Username</label>
                     <div class="field-wrap">
                         <i class="ph-bold ph-user field-icon"></i>
-                        <input type="text" id="username" name="username" class="form-control" placeholder="Enter your username"
+                        <input type="text" id="username" name="username" class="form-control" placeholder="Enter username"
                                value="<?php echo isset($username) ? htmlspecialchars($username) : ''; ?>"
                                autocomplete="username" required autofocus>
                     </div>
                 </div>
 
-                <div class="mb-4">
-                    <div class="d-flex align-items-center justify-content-between mb-1">
-                        <label class="field-label mb-0" for="password">Password</label>
-                    </div>
+                <div class="field-group mb-4">
+                    <label class="field-label" for="password">Password</label>
                     <div class="field-wrap">
                         <i class="ph-bold ph-lock-simple field-icon"></i>
-                        <input type="password" id="password" name="password" class="form-control" placeholder="Enter your password"
+                        <input type="password" id="password" name="password" class="form-control" placeholder="Enter password"
                                autocomplete="current-password" required>
                         <button type="button" class="pw-toggle" id="pwToggle" aria-label="Show password" title="Show / hide password">
                             <i class="ph-bold ph-eye"></i>
@@ -668,13 +667,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 </div>
 
                 <button type="submit" id="loginBtn" class="btn btn-login w-100 d-inline-flex align-items-center justify-content-center gap-2">
-                    <i class="ph-bold ph-sign-in fs-5"></i> <span>Login to Dashboard</span>
+                    <span>Sign In</span>
+                    <i class="ph-bold ph-arrow-right"></i>
                 </button>
             </form>
 
-            <div class="mt-4 pt-4 border-top text-center">
+            <div class="mt-4 text-center">
                 <a href="index.php" class="back-link">
-                    <i class="ph-bold ph-arrow-left"></i> <span>Back to Citizen Survey Form</span>
+                    <i class="ph-bold ph-arrow-left"></i> <span>Back to Citizen Survey</span>
                 </a>
             </div>
         </div>
