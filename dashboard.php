@@ -62,7 +62,7 @@ $end_date       = $_GET['end_date'] ?? '';
 // Build available month choices (All months of current year + historical months from database)
 $available_months = [];
 try {
-    $m_stmt = $pdo->query("SELECT DISTINCT DATE_FORMAT(survey_date, '%Y-%m') as ym, DATE_FORMAT(survey_date, '%M %Y') as m_label FROM responses WHERE survey_date IS NOT NULL AND survey_date != '' AND survey_date != '0000-00-00' ORDER BY ym DESC");
+    $m_stmt = $pdo->query("SELECT DISTINCT DATE_FORMAT(survey_date, '%Y-%m') as ym, DATE_FORMAT(survey_date, '%M %Y') as m_label FROM responses WHERE survey_date IS NOT NULL AND CAST(survey_date AS VARCHAR) NOT IN ('', '0000-00-00') ORDER BY ym DESC");
     while ($m_row = $m_stmt->fetch(PDO::FETCH_ASSOC)) {
         if (!empty($m_row['ym'])) {
             $available_months[$m_row['ym']] = $m_row['m_label'];

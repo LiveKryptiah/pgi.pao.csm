@@ -99,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['wipe_month_data'])) {
 // Retrieve distinct months with record tallies for the Wipe Month selector
 $month_tallies = [];
 try {
-    $mt_stmt = $pdo->query("SELECT DATE_FORMAT(survey_date, '%Y-%m') as ym, DATE_FORMAT(survey_date, '%M %Y') as m_label, COUNT(*) as total_cnt, SUM(CASE WHEN control_number LIKE '%B' OR control_number LIKE 'BLK-%' THEN 1 ELSE 0 END) as bulk_cnt FROM responses WHERE survey_date IS NOT NULL AND survey_date != '' AND survey_date != '0000-00-00' GROUP BY ym ORDER BY ym DESC");
+    $mt_stmt = $pdo->query("SELECT DATE_FORMAT(survey_date, '%Y-%m') as ym, DATE_FORMAT(survey_date, '%M %Y') as m_label, COUNT(*) as total_cnt, SUM(CASE WHEN control_number LIKE '%B' OR control_number LIKE 'BLK-%' THEN 1 ELSE 0 END) as bulk_cnt FROM responses WHERE survey_date IS NOT NULL AND CAST(survey_date AS VARCHAR) NOT IN ('', '0000-00-00') GROUP BY ym, m_label ORDER BY ym DESC");
     $month_tallies = $mt_stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {}
 

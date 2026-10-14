@@ -75,7 +75,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     ]);
 
     // Get the ID of the record we just inserted
-    $new_record_id = $pdo->lastInsertId();
+    $new_record_id = @$pdo->lastInsertId('responses_id_seq') ?: $pdo->lastInsertId();
 
     // ==========================================
     // STEP 2: RE-CALCULATE ALL CONTROL NUMBERS CHRONOLOGICALLY
