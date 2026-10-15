@@ -82,10 +82,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // ==========================================
     // Fetch ALL records, strictly sorted by Date (Oldest to Newest)
     // If two records share the exact same date, it uses the ID as a tie-breaker
-    $fetch_stmt = $pdo->query("SELECT id, survey_date FROM responses ORDER BY survey_date ASC, id ASC");
+    $fetch_stmt = $pdo->query("SELECT id, survey_date, control_number FROM responses ORDER BY survey_date ASC, id ASC");
     $all_records = $fetch_stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $counter = 1;
+    $month_counters = [];
     $final_control_number = '';
 
     // Prepare the update statement
@@ -94,25 +94,31 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     foreach ($all_records as $row) {
         // 1. Get the 2-digit month from the row's specific date
         $month = date('m', strtotime($row['survey_date']));
+        if (!isset($month_counters[$month])) {
+            $month_counters[$month] = 1;
+        }
         
-        // 2. Create the 3-digit running sequence based on chronological order
-        $padded_sequence = sprintf("%03d", $counter);
+        // 2. Create the 3-digit running sequence based on chronological order within this month
+        $padded_sequence = sprintf("%03d", $month_counters[$month]);
+        $is_bulk = (strpos($row['control_number'] ?? '', 'B') !== false);
         
-        // 3. Combine them (e.g., E06-017)
-        $new_cn = "E" . $month . "-" . $padded_sequence;
+        // 3. Combine them (e.g., E10-001)
+        $new_cn = "E" . $month . "-" . $padded_sequence . ($is_bulk ? 'B' : '');
 
         // 4. Update this specific row in the database with the corrected number
-        $update_stmt->execute([
-            ':cn' => $new_cn,
-            ':id' => $row['id']
-        ]);
+        if ($new_cn !== $row['control_number']) {
+            $update_stmt->execute([
+                ':cn' => $new_cn,
+                ':id' => $row['id']
+            ]);
+        }
 
         // If this is the record the user JUST inserted, save it so we can show it in the alert
         if ($row['id'] == $new_record_id) {
             $final_control_number = $new_cn;
         }
 
-        $counter++; // Move to the next sequence number
+        $month_counters[$month]++; // Move to the next sequence number for this month
     }
 
     // ==========================================

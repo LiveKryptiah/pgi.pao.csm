@@ -78,6 +78,7 @@ function buildCsmExportData($pdo, $month) {
     $month_ts = strtotime($month . '-01');
     $month_abbr = strtoupper(date('M', $month_ts));
     $month_full = date('F Y', $month_ts);
+    $month_2digit = date('m', $month_ts);
 
     $map_client = function($ctype) {
         $c = strtolower(trim($ctype ?? ''));
@@ -208,12 +209,16 @@ function buildCsmExportData($pdo, $month) {
 
         $comments = preg_replace('/[\r\n\t]+/', ' ', trim($row['suggestions'] ?? ''));
 
+        // Standardized Control Number starting from E{MM}-001, E{MM}-002 ...
+        // strictly matching Provincial Assessor's Office (PAO Isabela) CSM spreadsheet standard
+        $formatted_ctrl_num = sprintf("E%s-%03d", $month_2digit, $seq);
+
         $raw_data_rows[] = [
-            $row['control_number'] ?? '',
+            $formatted_ctrl_num,
             'E',
             $row_month,
             $date_day,
-            $seq++,
+            $seq,
             '',
             '1',
             $c_code,
@@ -235,6 +240,7 @@ function buildCsmExportData($pdo, $month) {
             $sqd_codes['sqd8'],
             $comments
         ];
+        $seq++;
     }
 
     $summary_rows = [
@@ -371,11 +377,16 @@ function buildCsmExportData($pdo, $month) {
         'Uri ng Kliyente', 'Kasarian', 'Edad', 'Rehiyon ng Tirahan', 'Services Availed',
         'CC1', 'CC2', 'CC3', 'SQD0', 'SQD1', 'SQD2', 'SQD3', 'SQD4', 'SQD5', 'SQD6', 'SQD7', 'SQD8', 'Suggestions/Comments'
     ];
-    $data_only_lines = [implode("\t", $data_only_headers)];
+    // In copy, exclude the table title/header so clipboard begins directly on line 1 with e.g. E10-001
+    $data_only_lines = [];
     foreach ($raw_data_rows as $dr) {
         $data_only_lines[] = implode("\t", $dr);
     }
     $tsv_data_only = implode("\r\n", $data_only_lines);
+
+    // Provide headers-included version for optional preview toggle
+    $data_with_headers_lines = array_merge([implode("\t", $data_only_headers)], $data_only_lines);
+    $tsv_data_with_headers = implode("\r\n", $data_with_headers_lines);
 
     $summary_headers = ['Category / Code', 'Description', 'Total'];
     $summary_lines = [implode("\t", $summary_headers)];
@@ -402,14 +413,15 @@ function buildCsmExportData($pdo, $month) {
     fclose($csv_full_buffer);
 
     return [
-        'month'            => $month,
-        'month_label'      => $month_full,
-        'total_records'    => $total_cnt,
-        'tsv_full'         => $tsv_full,
-        'tsv_data_only'    => $tsv_data_only,
-        'tsv_summary_only' => $tsv_summary_only,
-        'csv_full'         => $csv_full,
-        'csv_data_only'    => $csv_data_only
+        'month'                 => $month,
+        'month_label'           => $month_full,
+        'total_records'         => $total_cnt,
+        'tsv_full'              => $tsv_full,
+        'tsv_data_only'         => $tsv_data_only,
+        'tsv_data_with_headers' => $tsv_data_with_headers,
+        'tsv_summary_only'      => $tsv_summary_only,
+        'csv_full'              => $csv_full,
+        'csv_data_only'         => $csv_data_only
     ];
 }
 
@@ -442,13 +454,14 @@ if (isset($_GET['action']) && in_array($_GET['action'], ['get_csm_export', 'down
 
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
-            'status'           => 'success',
-            'month'            => $export_data['month'],
-            'month_label'      => $export_data['month_label'],
-            'total_records'    => $export_data['total_records'],
-            'tsv_full'         => $export_data['tsv_full'],
-            'tsv_data_only'    => $export_data['tsv_data_only'],
-            'tsv_summary_only' => $export_data['tsv_summary_only']
+            'status'                => 'success',
+            'month'                 => $export_data['month'],
+            'month_label'           => $export_data['month_label'],
+            'total_records'         => $export_data['total_records'],
+            'tsv_full'              => $export_data['tsv_full'],
+            'tsv_data_only'         => $export_data['tsv_data_only'],
+            'tsv_data_with_headers' => $export_data['tsv_data_with_headers'],
+            'tsv_summary_only'      => $export_data['tsv_summary_only']
         ], JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     } catch (Throwable $e) {
@@ -1538,15 +1551,18 @@ try {
                     </li>
                 </ul>
 
-                <!-- Stats banner -->
+                <!-- Stats banner & Options -->
                 <div class="d-flex align-items-center justify-content-between p-2.5 mb-3 bg-light rounded-3 border flex-wrap gap-2">
                     <div class="d-flex align-items-center gap-2">
                         <span class="badge bg-success-subtle text-success fw-bold px-2.5 py-1.5" id="exportModalBadgeMonth">Month</span>
                         <span class="badge bg-secondary-subtle text-secondary fw-bold px-2.5 py-1.5" id="exportModalBadgeCount">0 Records</span>
-                        <span class="text-muted small d-none d-sm-inline">Separated by Tabs (<code>\t</code>) & Newlines (<code>\r\n</code>) for instant Excel column splitting</span>
+                        <span class="text-muted small d-none d-sm-inline">Separated by Tabs (<code>\t</code>) for instant Excel column splitting</span>
                     </div>
-                    <div class="text-muted small">
-                        Paste anywhere in Excel using <kbd class="bg-dark text-white px-2 py-0.5 rounded">Ctrl + V</kbd>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="includeHeadersToggle" onchange="toggleHeadersPreview()">
+                        <label class="form-check-label small fw-semibold text-muted" for="includeHeadersToggle">
+                            Include table title row (CSM Control No., etc.)
+                        </label>
                     </div>
                 </div>
 
@@ -1561,7 +1577,7 @@ try {
             </div>
             <div class="modal-footer border-top px-4 py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <div class="text-muted small">
-                    <i class="ph-bold ph-info text-primary me-1"></i> Tip: Select cell <strong>A1</strong> in your Excel sheet before pressing <kbd>Ctrl+V</kbd>.
+                    <i class="ph-bold ph-info text-primary me-1"></i> Tip: Select cell <strong>F15</strong> in your PAO Excel template (or <strong>A1</strong> in a new sheet) before pressing <kbd>Ctrl+V</kbd>.
                 </div>
                 <div class="d-flex align-items-center gap-2">
                     <button type="button" class="btn btn-sm btn-light border fw-semibold px-3 py-2 rounded-3" data-bs-dismiss="modal">Close</button>
@@ -1963,9 +1979,10 @@ try {
                 }, 2500);
             }
 
+            const firstRowSample = (textToCopy.split('\n')[0] || '').split('\t')[0] || 'E10-001';
             showCopyToast(
-                `Copied ${data.month_label} Data Table!`,
-                `25 columns ready to paste into Microsoft Excel or Google Sheets (Ctrl+V).`
+                `Copied ${data.month_label} Data (starts with ${firstRowSample})!`,
+                `Ready to paste into cell F15 in your PAO Excel template (Ctrl+V).`
             );
         } catch (err) {
             console.error(err);
@@ -1987,6 +2004,7 @@ try {
         $('#exportModalBadgeMonth').text(label || ym);
         $('#exportModalBadgeCount').text((count || 0) + ' Records');
         $('#modalDownloadCsvBtn').attr('href', `admin_bulk.php?action=download_csm_csv&month=${encodeURIComponent(ym)}`);
+        $('#includeHeadersToggle').prop('checked', false);
 
         // Reset tabs to Data Only
         const tabBtn = document.getElementById('tab-data-btn');
@@ -2026,9 +2044,16 @@ try {
         } else if (currentPreviewMode === 'summary_only') {
             txt = data.tsv_summary_only;
         } else {
-            txt = data.tsv_data_only;
+            const includeHeaders = $('#includeHeadersToggle').is(':checked');
+            txt = includeHeaders ? (data.tsv_data_with_headers || data.tsv_data_only) : data.tsv_data_only;
         }
         $('#exportPreviewTextarea').val(txt);
+    }
+
+    function toggleHeadersPreview() {
+        if (csmExportCache[currentModalYm]) {
+            updateModalPreviewText(csmExportCache[currentModalYm]);
+        }
     }
 
     async function copyModalCurrentContent() {
@@ -2042,7 +2067,8 @@ try {
         btn.find('i').removeClass('ph-copy').addClass('ph-check');
 
         await copyToClipboard(txt);
-        showCopyToast('Copied to Clipboard!', '25-column data table ready for Ctrl+V in Excel.');
+        const firstRowSample = (txt.split('\n')[0] || '').split('\t')[0] || 'E10-001';
+        showCopyToast('Copied to Clipboard!', `Ready to paste at cell F15 (starts with ${firstRowSample}).`);
 
         setTimeout(() => {
             $('#modalCopyBtnText').text(originalText);
