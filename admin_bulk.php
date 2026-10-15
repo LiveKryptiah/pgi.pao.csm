@@ -1,16 +1,31 @@
 <?php
+// Start output buffering immediately so no warning or whitespace breaks JSON responses
+ob_start();
+
 // ==========================================
-// DEBUG MODE: ON
+// CONFIGURATION & ERROR HANDLING
 // ==========================================
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
+// Prevent raw HTML errors from corrupting JSON payloads
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
 
-// MUST BE AT THE VERY TOP
-session_start();
+// Safe session start
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-// 1. SECURITY CHECK
+// 1. SECURITY CHECK (JSON-aware for AJAX calls)
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+    if (isset($_GET['action']) && in_array($_GET['action'], ['get_csm_export', 'download_csm_csv'])) {
+        if (ob_get_length()) ob_clean();
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'status' => 'error', 
+            'message' => 'Your administrator session has expired. Please refresh the page and sign in again.'
+        ]);
+        exit;
+    }
     header("Location: login.php");
     exit;
 }
@@ -50,7 +65,13 @@ $last_gen_month = "";
 // Formatted matching Provincial Assessor's Office (PAO Isabela) CSM sheet
 // ==========================================
 function buildCsmExportData($pdo, $month) {
-    $stmt = $pdo->prepare("SELECT * FROM responses WHERE DATE_FORMAT(survey_date, '%Y-%m') = :month ORDER BY survey_date ASC, id ASC");
+    $driver = 'mysql';
+    try {
+        $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+    } catch (Exception $e) {}
+
+    $month_sql = ($driver === 'pgsql') ? "TO_CHAR(survey_date, 'YYYY-MM')" : "DATE_FORMAT(survey_date, '%Y-%m')";
+    $stmt = $pdo->prepare("SELECT * FROM responses WHERE {$month_sql} = :month ORDER BY survey_date ASC, id ASC");
     $stmt->execute([':month' => $month]);
     $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -384,6 +405,7 @@ function buildCsmExportData($pdo, $month) {
 
 // 1b. HANDLE AJAX COPY & EXPORT REQUESTS (EXCEL TSV & CSV)
 if (isset($_GET['action']) && in_array($_GET['action'], ['get_csm_export', 'download_csm_csv']) && !empty($_GET['month'])) {
+    if (ob_get_length()) ob_clean(); // Discard any prior output or notices
     $req_month = trim($_GET['month']);
     if (!preg_match('/^\d{4}-\d{2}$/', $req_month)) {
         if ($_GET['action'] === 'get_csm_export') {
@@ -395,29 +417,39 @@ if (isset($_GET['action']) && in_array($_GET['action'], ['get_csm_export', 'down
         }
     }
 
-    $export_data = buildCsmExportData($pdo, $req_month);
+    try {
+        $export_data = buildCsmExportData($pdo, $req_month);
 
-    if ($_GET['action'] === 'download_csm_csv') {
-        $filename = 'CSM_Records_' . $req_month . '.csv';
-        header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
-        header('Pragma: no-cache');
-        header('Expires: 0');
-        echo $export_data['csv_full'];
+        if ($_GET['action'] === 'download_csm_csv') {
+            $filename = 'CSM_Records_' . $req_month . '.csv';
+            header('Content-Type: text/csv; charset=utf-8');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Pragma: no-cache');
+            header('Expires: 0');
+            echo $export_data['csv_full'];
+            exit;
+        }
+
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'status'           => 'success',
+            'month'            => $export_data['month'],
+            'month_label'      => $export_data['month_label'],
+            'total_records'    => $export_data['total_records'],
+            'tsv_full'         => $export_data['tsv_full'],
+            'tsv_data_only'    => $export_data['tsv_data_only'],
+            'tsv_summary_only' => $export_data['tsv_summary_only']
+        ], JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
+    } catch (Throwable $e) {
+        if ($_GET['action'] === 'get_csm_export') {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['status' => 'error', 'message' => 'Export error: ' . $e->getMessage()]);
+            exit;
+        } else {
+            die('Export error: ' . $e->getMessage());
+        }
     }
-
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode([
-        'status'           => 'success',
-        'month'            => $export_data['month'],
-        'month_label'      => $export_data['month_label'],
-        'total_records'    => $export_data['total_records'],
-        'tsv_full'         => $export_data['tsv_full'],
-        'tsv_data_only'    => $export_data['tsv_data_only'],
-        'tsv_summary_only' => $export_data['tsv_summary_only']
-    ]);
-    exit;
 }
 
 // 2. HANDLE DELETE ALL BULK DATA
@@ -1861,9 +1893,29 @@ try {
             return csmExportCache[ym];
         }
         const response = await fetch(`admin_bulk.php?action=get_csm_export&month=${encodeURIComponent(ym)}`);
-        if (!response.ok) throw new Error('Network error loading export data.');
-        const data = await response.json();
-        if (data.status !== 'success') throw new Error(data.message || 'Export error');
+        const text = await response.text();
+
+        if (text.includes('login.php') || text.includes('Sign In') || text.includes('administrator session has expired')) {
+            throw new Error('Your session has expired. Please refresh the page and sign in again.');
+        }
+
+        let data;
+        try {
+            const jsonStart = text.indexOf('{');
+            const jsonEnd = text.lastIndexOf('}');
+            if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+                data = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
+            } else {
+                data = JSON.parse(text);
+            }
+        } catch (e) {
+            const cleanErr = text.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+            throw new Error(cleanErr.substring(0, 150) || 'Invalid server response');
+        }
+
+        if (data.status !== 'success') {
+            throw new Error(data.message || 'Export error');
+        }
         csmExportCache[ym] = data;
         return data;
     }
