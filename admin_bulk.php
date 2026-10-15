@@ -385,12 +385,21 @@ function buildCsmExportData($pdo, $month) {
     $tsv_summary_only = implode("\r\n", $summary_lines);
 
     $csv_buffer = fopen('php://memory', 'r+');
-    foreach ($full_rows as $r) {
-        fputcsv($csv_buffer, $r);
+    fputcsv($csv_buffer, $data_only_headers);
+    foreach ($raw_data_rows as $dr) {
+        fputcsv($csv_buffer, $dr);
     }
     rewind($csv_buffer);
-    $csv_full = stream_get_contents($csv_buffer);
+    $csv_data_only = stream_get_contents($csv_buffer);
     fclose($csv_buffer);
+
+    $csv_full_buffer = fopen('php://memory', 'r+');
+    foreach ($full_rows as $r) {
+        fputcsv($csv_full_buffer, $r);
+    }
+    rewind($csv_full_buffer);
+    $csv_full = stream_get_contents($csv_full_buffer);
+    fclose($csv_full_buffer);
 
     return [
         'month'            => $month,
@@ -399,7 +408,8 @@ function buildCsmExportData($pdo, $month) {
         'tsv_full'         => $tsv_full,
         'tsv_data_only'    => $tsv_data_only,
         'tsv_summary_only' => $tsv_summary_only,
-        'csv_full'         => $csv_full
+        'csv_full'         => $csv_full,
+        'csv_data_only'    => $csv_data_only
     ];
 }
 
@@ -421,12 +431,12 @@ if (isset($_GET['action']) && in_array($_GET['action'], ['get_csm_export', 'down
         $export_data = buildCsmExportData($pdo, $req_month);
 
         if ($_GET['action'] === 'download_csm_csv') {
-            $filename = 'CSM_Records_' . $req_month . '.csv';
+            $filename = 'CSM_DataTable_' . $req_month . '.csv';
             header('Content-Type: text/csv; charset=utf-8');
             header('Content-Disposition: attachment; filename="' . $filename . '"');
             header('Pragma: no-cache');
             header('Expires: 0');
-            echo $export_data['csv_full'];
+            echo $export_data['csv_data_only'];
             exit;
         }
 
@@ -1131,7 +1141,7 @@ try {
                 <i class="ph-bold ph-check-circle fs-5 text-success"></i>
                 <div class="flex-grow-1 fw-semibold"><?php echo htmlspecialchars($success_msg); ?></div>
                 <?php if(!empty($last_gen_month)): ?>
-                    <button type="button" class="btn btn-sm btn-success fw-bold px-3 py-1.5 rounded-3 d-inline-flex align-items-center gap-1.5 shadow-sm" onclick="copyMonthData('<?= htmlspecialchars($last_gen_month) ?>', 'full', this)">
+                    <button type="button" class="btn btn-sm btn-success fw-bold px-3 py-1.5 rounded-3 d-inline-flex align-items-center gap-1.5 shadow-sm" onclick="copyMonthData('<?= htmlspecialchars($last_gen_month) ?>', 'data_only', this)">
                         <i class="ph-bold ph-copy"></i> Copy <?= htmlspecialchars(date('F Y', strtotime($last_gen_month . '-01'))) ?> Data to Excel
                     </button>
                 <?php endif; ?>
@@ -1238,7 +1248,7 @@ try {
                         <span>Generates realistic data with prioritized 4 & 5 SQD scores (<code class="text-primary fw-bold">E{MM}-{seq}B</code>) and saves directly to database in real time.</span>
                     </div>
                     <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <button type="button" class="btn btn-outline-success fw-bold py-2 px-3 rounded-3 d-inline-flex align-items-center gap-2" onclick="copyCurrentTargetMonth(this)" title="Copy Excel sheet for selected Target Month">
+                        <button type="button" class="btn btn-outline-success fw-bold py-2 px-3 rounded-3 d-inline-flex align-items-center gap-2" onclick="copyCurrentTargetMonth(this)" title="Copy 25-column CSM data table for selected Target Month">
                             <i class="ph-bold ph-copy fs-5"></i>
                             <span>Copy Target Month Data</span>
                         </button>
@@ -1325,8 +1335,8 @@ try {
                                             <!-- Main Quick Copy Button -->
                                             <button type="button" 
                                                     class="btn btn-sm btn-outline-success rounded-3 py-1 px-2.5 d-inline-flex align-items-center gap-1.5 fw-semibold" 
-                                                    onclick="copyMonthData('<?= htmlspecialchars($mt['ym']) ?>', 'full', this)" 
-                                                    title="Copy Excel-ready CSM sheet for <?= htmlspecialchars($mt['m_label']) ?> (Ctrl+V into Excel)">
+                                                    onclick="copyMonthData('<?= htmlspecialchars($mt['ym']) ?>', 'data_only', this)" 
+                                                    title="Copy 25-column CSM data table for <?= htmlspecialchars($mt['m_label']) ?> (Ctrl+V into Excel)">
                                                 <i class="ph-bold ph-copy fs-6"></i>
                                                 <span>Copy Data</span>
                                             </button>
@@ -1340,25 +1350,25 @@ try {
                                                         title="More export options for <?= htmlspecialchars($mt['m_label']) ?>">
                                                     <i class="ph-bold ph-dots-three-vertical fs-6"></i>
                                                 </button>
-                                                <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1.5 rounded-3" style="min-width: 230px; font-size: 0.85rem;">
+                                                <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1.5 rounded-3" style="min-width: 240px; font-size: 0.85rem;">
                                                     <li class="dropdown-header text-uppercase fw-bold text-muted" style="font-size: 0.68rem; letter-spacing: 0.05em;">
                                                         <?= htmlspecialchars($mt['m_label']) ?> Export
-                                                    </li>
-                                                    <li>
-                                                        <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="copyMonthData('<?= htmlspecialchars($mt['ym']) ?>', 'full', this)">
-                                                            <i class="ph-bold ph-microsoft-excel-logo text-success fs-5"></i>
-                                                            <div>
-                                                                <div class="fw-semibold text-dark">Copy Full Sheet (Excel)</div>
-                                                                <div class="text-muted small" style="font-size: 0.72rem;">Summary on Left + Data on Right</div>
-                                                            </div>
-                                                        </button>
                                                     </li>
                                                     <li>
                                                         <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="copyMonthData('<?= htmlspecialchars($mt['ym']) ?>', 'data_only', this)">
                                                             <i class="ph-bold ph-table text-primary fs-5"></i>
                                                             <div>
-                                                                <div class="fw-semibold text-dark">Copy Data Rows Only</div>
-                                                                <div class="text-muted small" style="font-size: 0.72rem;">Columns F to AD with headers</div>
+                                                                <div class="fw-semibold text-dark">Copy Data Table Only</div>
+                                                                <div class="text-muted small" style="font-size: 0.72rem;">25 columns (CSM Control No. to Comments)</div>
+                                                            </div>
+                                                        </button>
+                                                    </li>
+                                                    <li>
+                                                        <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="copyMonthData('<?= htmlspecialchars($mt['ym']) ?>', 'full', this)">
+                                                            <i class="ph-bold ph-microsoft-excel-logo text-success fs-5"></i>
+                                                            <div>
+                                                                <div class="fw-semibold text-dark">Copy Full Template (Excel)</div>
+                                                                <div class="text-muted small" style="font-size: 0.72rem;">Summary on Left + Data on Right</div>
                                                             </div>
                                                         </button>
                                                     </li>
@@ -1499,10 +1509,10 @@ try {
                     </div>
                     <div>
                         <h5 class="modal-title fw-bold text-dark fs-6 mb-0" id="exportPreviewModalLabel">
-                            CSM Excel Export & Clipboard Generator
+                            CSM Data Table Copy & Preview (25 Columns)
                         </h5>
                         <p class="text-muted small mb-0" id="exportModalSubtitle">
-                            Ready-to-paste spreadsheet formatted according to Provincial Assessor's Office CSM standards
+                            Data table from CSM Control No. to Suggestions/Comments formatted for Excel (Ctrl+V)
                         </p>
                     </div>
                 </div>
@@ -1512,13 +1522,13 @@ try {
                 <!-- Nav tabs -->
                 <ul class="nav nav-pills mb-3 gap-2 border-bottom pb-2" id="exportTab" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link active rounded-pill fw-semibold py-1.5 px-3 small" id="tab-full-btn" data-bs-toggle="pill" data-bs-target="#tab-full" type="button" role="tab" onclick="switchPreviewMode('full')">
-                            <i class="ph-bold ph-microsoft-excel-logo me-1"></i> Full Excel Sheet (Side-by-Side)
+                        <button class="nav-link active rounded-pill fw-semibold py-1.5 px-3 small" id="tab-data-btn" data-bs-toggle="pill" data-bs-target="#tab-data" type="button" role="tab" onclick="switchPreviewMode('data_only')">
+                            <i class="ph-bold ph-table me-1"></i> Data Table Only (25 Columns)
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link rounded-pill fw-semibold py-1.5 px-3 small" id="tab-data-btn" data-bs-toggle="pill" data-bs-target="#tab-data" type="button" role="tab" onclick="switchPreviewMode('data_only')">
-                            <i class="ph-bold ph-table me-1"></i> Data Rows Only (Cols F-AD)
+                        <button class="nav-link rounded-pill fw-semibold py-1.5 px-3 small" id="tab-full-btn" data-bs-toggle="pill" data-bs-target="#tab-full" type="button" role="tab" onclick="switchPreviewMode('full')">
+                            <i class="ph-bold ph-microsoft-excel-logo me-1"></i> Full Template (with Side Tallies)
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
@@ -1921,7 +1931,7 @@ try {
     }
 
     async function copyMonthData(ym, mode, btn) {
-        mode = mode || 'full';
+        mode = mode || 'data_only';
         const originalHtml = btn ? btn.innerHTML : '';
         if (btn) {
             btn.disabled = true;
@@ -1932,15 +1942,15 @@ try {
             const data = await fetchMonthExport(ym);
             let textToCopy = '';
             let label = '';
-            if (mode === 'data_only') {
-                textToCopy = data.tsv_data_only;
-                label = 'Data Rows Only';
+            if (mode === 'full') {
+                textToCopy = data.tsv_full;
+                label = 'Full Template';
             } else if (mode === 'summary_only') {
                 textToCopy = data.tsv_summary_only;
                 label = 'Summary Breakdown';
             } else {
-                textToCopy = data.tsv_full;
-                label = 'Full Excel Sheet';
+                textToCopy = data.tsv_data_only;
+                label = 'Data Table (25 Columns)';
             }
 
             await copyToClipboard(textToCopy);
@@ -1954,8 +1964,8 @@ try {
             }
 
             showCopyToast(
-                `Copied ${data.month_label} (${label})!`,
-                `Ready to paste into Microsoft Excel or Google Sheets (Ctrl+V).`
+                `Copied ${data.month_label} Data Table!`,
+                `25 columns ready to paste into Microsoft Excel or Google Sheets (Ctrl+V).`
             );
         } catch (err) {
             console.error(err);
@@ -1972,14 +1982,14 @@ try {
 
     async function openPreviewExportModal(ym, label, count) {
         currentModalYm = ym;
-        currentPreviewMode = 'full';
+        currentPreviewMode = 'data_only';
 
         $('#exportModalBadgeMonth').text(label || ym);
         $('#exportModalBadgeCount').text((count || 0) + ' Records');
         $('#modalDownloadCsvBtn').attr('href', `admin_bulk.php?action=download_csm_csv&month=${encodeURIComponent(ym)}`);
 
-        // Reset tabs to Full
-        const tabBtn = document.getElementById('tab-full-btn');
+        // Reset tabs to Data Only
+        const tabBtn = document.getElementById('tab-data-btn');
         if (tabBtn) {
             bootstrap.Tab.getOrCreateInstance(tabBtn).show();
         }
@@ -2011,12 +2021,12 @@ try {
 
     function updateModalPreviewText(data) {
         let txt = '';
-        if (currentPreviewMode === 'data_only') {
-            txt = data.tsv_data_only;
+        if (currentPreviewMode === 'full') {
+            txt = data.tsv_full;
         } else if (currentPreviewMode === 'summary_only') {
             txt = data.tsv_summary_only;
         } else {
-            txt = data.tsv_full;
+            txt = data.tsv_data_only;
         }
         $('#exportPreviewTextarea').val(txt);
     }
@@ -2032,7 +2042,7 @@ try {
         btn.find('i').removeClass('ph-copy').addClass('ph-check');
 
         await copyToClipboard(txt);
-        showCopyToast('Copied to Clipboard!', 'Spreadsheet format ready for Ctrl+V in Excel.');
+        showCopyToast('Copied to Clipboard!', '25-column data table ready for Ctrl+V in Excel.');
 
         setTimeout(() => {
             $('#modalCopyBtnText').text(originalText);
@@ -2047,7 +2057,7 @@ try {
             alert('Please select a Target Month first.');
             return;
         }
-        copyMonthData(ym, 'full', btn);
+        copyMonthData(ym, 'data_only', btn);
     }
 </script>
 <script src="darkmode.js"></script>
