@@ -43,6 +43,7 @@ sort($isabelaLocations);
 
 $success_msg = "";
 $error_msg = "";
+$last_gen_month = "";
 
 // ==========================================
 // CSM EXCEL & CSV EXPORT GENERATOR
@@ -571,6 +572,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['bulk_json']) || iss
         }
         
         $pdo->commit();
+        $last_gen_month = !empty($records[0]['survey_date']) ? date('Y-m', strtotime($records[0]['survey_date'])) : '';
         $success_msg = "Successfully generated and saved " . $count . " records to the database!";
         
     } catch (Exception $e) {
@@ -1093,9 +1095,14 @@ try {
     <div class="container-fluid px-4 py-4 pb-5">
         
         <?php if($success_msg): ?> 
-            <div class="alert alert-success border-0 shadow-sm d-flex align-items-center gap-2 mb-4" style="background-color: #ecfdf5; color: #065f46; border-radius: 12px;">
+            <div class="alert alert-success border-0 shadow-sm d-flex align-items-center gap-2 mb-4 flex-wrap" style="background-color: #ecfdf5; color: #065f46; border-radius: 12px;">
                 <i class="ph-bold ph-check-circle fs-5 text-success"></i>
                 <div class="flex-grow-1 fw-semibold"><?php echo htmlspecialchars($success_msg); ?></div>
+                <?php if(!empty($last_gen_month)): ?>
+                    <button type="button" class="btn btn-sm btn-success fw-bold px-3 py-1.5 rounded-3 d-inline-flex align-items-center gap-1.5 shadow-sm" onclick="copyMonthData('<?= htmlspecialchars($last_gen_month) ?>', 'full', this)">
+                        <i class="ph-bold ph-copy"></i> Copy <?= htmlspecialchars(date('F Y', strtotime($last_gen_month . '-01'))) ?> Data to Excel
+                    </button>
+                <?php endif; ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div> 
         <?php endif; ?>
@@ -1198,10 +1205,16 @@ try {
                         <i class="ph-bold ph-info text-primary fs-5"></i>
                         <span>Generates realistic data with prioritized 4 & 5 SQD scores (<code class="text-primary fw-bold">E{MM}-{seq}B</code>) and saves directly to database in real time.</span>
                     </div>
-                    <button type="submit" id="generateBtn" class="btn-modern-primary py-2 px-4 fw-bold shadow-sm d-inline-flex align-items-center gap-2">
-                        <i class="ph-bold ph-lightning text-warning fs-5"></i>
-                        <span id="generateBtnText">Generate & Save to Database</span>
-                    </button>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <button type="button" class="btn btn-outline-success fw-bold py-2 px-3 rounded-3 d-inline-flex align-items-center gap-2" onclick="copyCurrentTargetMonth(this)" title="Copy Excel sheet for selected Target Month">
+                            <i class="ph-bold ph-copy fs-5"></i>
+                            <span>Copy Target Month Data</span>
+                        </button>
+                        <button type="submit" id="generateBtn" class="btn-modern-primary py-2 px-4 fw-bold shadow-sm d-inline-flex align-items-center gap-2">
+                            <i class="ph-bold ph-lightning text-warning fs-5"></i>
+                            <span id="generateBtnText">Generate & Save to Database</span>
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -1974,6 +1987,15 @@ try {
             btn.find('i').removeClass('ph-check').addClass('ph-copy');
             btn.prop('disabled', false);
         }, 2000);
+    }
+
+    function copyCurrentTargetMonth(btn) {
+        const ym = $('#genMonth').val();
+        if (!ym) {
+            alert('Please select a Target Month first.');
+            return;
+        }
+        copyMonthData(ym, 'full', btn);
     }
 </script>
 <script src="darkmode.js"></script>
