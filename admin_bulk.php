@@ -44,6 +44,381 @@ sort($isabelaLocations);
 $success_msg = "";
 $error_msg = "";
 
+// ==========================================
+// CSM EXCEL & CSV EXPORT GENERATOR
+// Formatted matching Provincial Assessor's Office (PAO Isabela) CSM sheet
+// ==========================================
+function buildCsmExportData($pdo, $month) {
+    $stmt = $pdo->prepare("SELECT * FROM responses WHERE DATE_FORMAT(survey_date, '%Y-%m') = :month ORDER BY survey_date ASC, id ASC");
+    $stmt->execute([':month' => $month]);
+    $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $month_ts = strtotime($month . '-01');
+    $month_abbr = strtoupper(date('M', $month_ts));
+    $month_full = date('F Y', $month_ts);
+
+    $map_client = function($ctype) {
+        $c = strtolower(trim($ctype ?? ''));
+        if (strpos($c, 'citizen') !== false || strpos($c, 'mamayan') !== false || strpos($c, 'mamamayan') !== false) return 1;
+        if (strpos($c, 'business') !== false || strpos($c, 'negosyo') !== false) return 2;
+        if (strpos($c, 'government') !== false || strpos($c, 'gobyerno') !== false) return 3;
+        return 4;
+    };
+
+    $map_gender = function($gender) {
+        $g = strtolower(trim($gender ?? ''));
+        if ($g === 'male' || $g === 'lalaki' || $g === 'lalake') return 1;
+        if ($g === 'female' || $g === 'babae') return 2;
+        return 3;
+    };
+
+    $map_age = function($age) {
+        $a = strtolower(trim($age ?? ''));
+        if ($a === '15-19' || strpos($a, '19') !== false) return 1;
+        if ($a === '20-29' || $a === '20-34' || $a === '20-30') return 2;
+        if ($a === '30-39' || $a === '35-49') return 3;
+        if ($a === '40-49' || $a === '50-64' || $a === '50-59') return 4;
+        if (strpos($a, '60+') !== false || strpos($a, '65') !== false) return 5;
+        return 6;
+    };
+
+    $map_service = function($trans) {
+        $t = strtolower(trim($trans ?? ''));
+        if (strpos($t, 'transfer') !== false) return 1;
+        if (strpos($t, 'subdivision') !== false || strpos($t, 'consolidation') !== false) return 2;
+        if (strpos($t, 'agri to urban') !== false) return 3;
+        if (strpos($t, 'urban to urban') !== false) return 4;
+        if (strpos($t, 'reassessment') !== false || strpos($t, 'dp') !== false || strpos($t, 'pc') !== false) return 5;
+        if (strpos($t, 'discovery') !== false || strpos($t, 'declaration') !== false) return 6;
+        if (strpos($t, 'certification') !== false || strpos($t, 'ctc') !== false || strpos($t, 'cpc') !== false || strpos($t, 'photocopy') !== false || strpos($t, 'certificate') !== false) return 7;
+        if (strpos($t, 'verification') !== false || strpos($t, 'back') !== false || strpos($t, 'tracking') !== false || strpos($t, 'tracing') !== false) return 8;
+        if (strpos($t, 'annotation') !== false) return 9;
+        if (strpos($t, 'ocular') !== false) return 10;
+        if (strpos($t, 'cancellation of td') !== false) return 11;
+        if (strpos($t, 'tmcr') !== false || strpos($t, 'map') !== false) return 12;
+        if (strpos($t, 'posting') !== false) return 13;
+        return 7;
+    };
+
+    $map_cc1 = function($v) {
+        $v = strtolower(trim((string)$v));
+        if ($v === '1' || (strpos($v, 'nakita') !== false && strpos($v, 'alam') !== false)) return 1;
+        if ($v === '2' || (strpos($v, 'hindi') !== false && strpos($v, 'nakita') !== false)) return 2;
+        if ($v === '3' || strpos($v, 'nalaman') !== false) return 3;
+        if ($v === '4' || strpos($v, 'hindi alam') !== false) return 4;
+        return 1;
+    };
+
+    $map_cc2 = function($v) {
+        $v = strtolower(trim((string)$v));
+        if ($v === '1' || (strpos($v, 'madaling') !== false && strpos($v, 'medyo') === false) || strpos($v, 'easy') !== false) return 1;
+        if ($v === '2' || strpos($v, 'medyo') !== false) return 2;
+        if ($v === '3' || strpos($v, 'mahirap') !== false || strpos($v, 'diffic') !== false) return 3;
+        if ($v === '4' || strpos($v, 'not visible') !== false || (strpos($v, 'hindi') !== false && strpos($v, 'makita') !== false)) return 4;
+        if ($v === '5' || $v === 'n/a') return 5;
+        return 1;
+    };
+
+    $map_cc3 = function($v) {
+        $v = strtolower(trim((string)$v));
+        if ($v === '1' || strpos($v, 'sobrang') !== false || strpos($v, 'very') !== false) return 1;
+        if ($v === '2' || strpos($v, 'naman') !== false || strpos($v, 'somewhat') !== false) return 2;
+        if ($v === '3' || strpos($v, 'hindi') !== false || strpos($v, 'did not') !== false) return 3;
+        if ($v === '4' || $v === 'n/a') return 4;
+        return 1;
+    };
+
+    $map_sqd = function($v) {
+        $v = trim((string)$v);
+        if ($v === '5') return 5;
+        if ($v === '4') return 4;
+        if ($v === '3') return 3;
+        if ($v === '2') return 2;
+        if ($v === '1') return 1;
+        if ($v === '6' || strtoupper($v) === 'N/A') return 6;
+        return 5;
+    };
+
+    $total_cnt = count($records);
+    $tally_client = [1 => 0, 2 => 0, 3 => 0, 4 => 0];
+    $tally_gender = [1 => 0, 2 => 0, 3 => 0];
+    $tally_age = [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0, 6 => 0];
+    $tally_serv = array_fill(1, 13, 0);
+    $tally_cc1 = [1 => 0, 2 => 0, 3 => 0, 4 => 0];
+    $tally_cc2 = [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0];
+    $tally_cc3 = [1 => 0, 2 => 0, 3 => 0, 4 => 0];
+    $sqd_keys = ['sqd0', 'sqd1', 'sqd2', 'sqd3', 'sqd4', 'sqd5', 'sqd6', 'sqd7', 'sqd8'];
+    $tally_sqd = [];
+    foreach ($sqd_keys as $sk) {
+        $tally_sqd[$sk] = [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0, 6 => 0];
+    }
+
+    $raw_data_rows = [];
+    $seq = 1;
+
+    foreach ($records as $row) {
+        $c_code = $map_client($row['client_type'] ?? '');
+        $g_code = $map_gender($row['gender'] ?? '');
+        $a_code = $map_age($row['age_group'] ?? '');
+        $s_code = $map_service($row['transaction_type'] ?? '');
+        $cc1_c  = $map_cc1($row['cc1'] ?? '1');
+        $cc2_c  = $map_cc2($row['cc2'] ?? '1');
+        $cc3_c  = $map_cc3($row['cc3'] ?? '1');
+
+        $tally_client[$c_code]++;
+        $tally_gender[$g_code]++;
+        $tally_age[$a_code]++;
+        $tally_serv[$s_code]++;
+        $tally_cc1[$cc1_c]++;
+        $tally_cc2[$cc2_c]++;
+        $tally_cc3[$cc3_c]++;
+
+        $sqd_codes = [];
+        foreach ($sqd_keys as $sk) {
+            $sc = $map_sqd($row[$sk] ?? 5);
+            $sqd_codes[$sk] = $sc;
+            $tally_sqd[$sk][$sc]++;
+        }
+
+        $s_date = $row['survey_date'] ?? '';
+        $date_day = !empty($s_date) && $s_date !== '0000-00-00' ? (int)date('j', strtotime($s_date)) : 1;
+        $row_month = !empty($s_date) && $s_date !== '0000-00-00' ? strtoupper(date('M', strtotime($s_date))) : $month_abbr;
+
+        $comments = preg_replace('/[\r\n\t]+/', ' ', trim($row['suggestions'] ?? ''));
+
+        $raw_data_rows[] = [
+            $row['control_number'] ?? '',
+            'E',
+            $row_month,
+            $date_day,
+            $seq++,
+            '',
+            '1',
+            $c_code,
+            $g_code,
+            $a_code,
+            '',
+            $s_code,
+            $cc1_c,
+            $cc2_c,
+            $cc3_c,
+            $sqd_codes['sqd0'],
+            $sqd_codes['sqd1'],
+            $sqd_codes['sqd2'],
+            $sqd_codes['sqd3'],
+            $sqd_codes['sqd4'],
+            $sqd_codes['sqd5'],
+            $sqd_codes['sqd6'],
+            $sqd_codes['sqd7'],
+            $sqd_codes['sqd8'],
+            $comments
+        ];
+    }
+
+    $summary_rows = [
+        ['Internal or External', '', ''],
+        ['1', 'External', $total_cnt],
+        ['2', 'Internal', 0],
+        ['', '', ''],
+        ['Uri ng Kliyente', '', ''],
+        ['1', 'Citizen/Mamayan', $tally_client[1]],
+        ['2', 'Business/Negosyo', $tally_client[2]],
+        ['3', 'Government/Gobyerno', $tally_client[3]],
+        ['4', 'Did not specify', $tally_client[4]],
+        ['', 'TOTAL', $total_cnt],
+        ['', '', ''],
+        ['Kasarian', '', ''],
+        ['1', 'Lalaki', $tally_gender[1]],
+        ['2', 'Babae', $tally_gender[2]],
+        ['3', 'Did not specify', $tally_gender[3]],
+        ['', 'TOTAL', $total_cnt],
+        ['', '', ''],
+        ['Edad', '', ''],
+        ['1', '19 or lower', $tally_age[1]],
+        ['2', '20-34', $tally_age[2]],
+        ['3', '35-49', $tally_age[3]],
+        ['4', '50-64', $tally_age[4]],
+        ['5', '65 or higher', $tally_age[5]],
+        ['6', 'Did not specify', $tally_age[6]],
+        ['', 'TOTAL', $total_cnt],
+        ['', '', ''],
+        ['Services Availed', '', ''],
+        ['1', 'TR', $tally_serv[1]],
+        ['2', 'SD / CS', $tally_serv[2]],
+        ['3', 'RC (Agri to Urban)', $tally_serv[3]],
+        ['4', 'RC (Urban to Urban)', $tally_serv[4]],
+        ['5', 'DP / PC / DT', $tally_serv[5]],
+        ['6', 'DC', $tally_serv[6]],
+        ['7', 'Certification / Certified Photocopy / Certified True Copy', $tally_serv[7]],
+        ['8', 'Verification / Back Tracing', $tally_serv[8]],
+        ['9', 'Annotation / Cancellation of Annotation', $tally_serv[9]],
+        ['10', 'Ocular Inspection', $tally_serv[10]],
+        ['11', 'Cancellation of TD', $tally_serv[11]],
+        ['12', 'TMCR/Section Map/s', $tally_serv[12]],
+        ['13', 'Posting', $tally_serv[13]],
+        ['', 'TOTAL', $total_cnt],
+        ['', '', ''],
+        ['CC1', '', ''],
+        ['1', "I know what a CC is and I saw this office's CC", $tally_cc1[1]],
+        ['2', "I know what a CC but I did not not see this office's CC", $tally_cc1[2]],
+        ['3', "I learned of the CC only when I saw this office's CC", $tally_cc1[3]],
+        ['4', "I do not know what a CC is and I did not see this office's CC", $tally_cc1[4]],
+        ['', 'TOTAL', $total_cnt],
+        ['', '', ''],
+        ['CC2', '', ''],
+        ['1', "Easy to see", $tally_cc2[1]],
+        ['2', "Somewhat easy to see", $tally_cc2[2]],
+        ['3', "Difficukt to see", $tally_cc2[3]],
+        ['4', "Not visible at all", $tally_cc2[4]],
+        ['5', "N/A", $tally_cc2[5]],
+        ['', 'TOTAL', $total_cnt],
+        ['', '', ''],
+        ['CC3', '', ''],
+        ['1', "Helped very much", $tally_cc3[1]],
+        ['2', "Somewhat helped", $tally_cc3[2]],
+        ['3', "Did not helped", $tally_cc3[3]],
+        ['4', "N/A", $tally_cc3[4]],
+        ['', 'TOTAL', $total_cnt],
+    ];
+
+    foreach ($sqd_keys as $sk) {
+        $summary_rows[] = ['', '', ''];
+        $summary_rows[] = [strtoupper($sk), '', ''];
+        $summary_rows[] = ['1', 'Strongly Disagree', $tally_sqd[$sk][1]];
+        $summary_rows[] = ['2', 'Disagree', $tally_sqd[$sk][2]];
+        $summary_rows[] = ['3', 'Neither agree nor disagree', $tally_sqd[$sk][3]];
+        $summary_rows[] = ['4', 'Agree', $tally_sqd[$sk][4]];
+        $summary_rows[] = ['5', 'Strongly Agree', $tally_sqd[$sk][5]];
+        $summary_rows[] = ['6', 'Not Applicable', $tally_sqd[$sk][6]];
+        $summary_rows[] = ['', 'TOTAL', $total_cnt];
+    }
+
+    $make_30_cols = function($cells) {
+        $row = array_fill(0, 30, '');
+        foreach ($cells as $col_idx => $val) {
+            $row[$col_idx] = (string)$val;
+        }
+        return $row;
+    };
+
+    $top_rows = [
+        $make_30_cols([12 => 'Services Availed', 20 => 'Edad']),
+        $make_30_cols([12 => '1', 13 => 'TR', 20 => '1', 21 => '19 or lower']),
+        $make_30_cols([12 => '2', 13 => 'SD / CS', 20 => '2', 21 => '20-34']),
+        $make_30_cols([12 => '3', 13 => 'RC (Agri to Urban)', 20 => '3', 21 => '35-49']),
+        $make_30_cols([12 => '4', 13 => 'RC (Urban to Urban)', 20 => '4', 21 => '50-64']),
+        $make_30_cols([12 => '5', 13 => 'DP / PC / DT', 20 => '5', 21 => '65 or higher']),
+        $make_30_cols([12 => '6', 13 => 'DC', 20 => '6', 21 => 'did not specify']),
+        $make_30_cols([12 => '7', 13 => 'Certification / Certified Photocopy / Certified True Copy']),
+        $make_30_cols([12 => '8', 13 => 'Verification / Back Tracing']),
+        $make_30_cols([12 => '9', 13 => 'Annotation / Cancellation of Annotation']),
+        $make_30_cols([12 => '10', 13 => 'Ocular Inspection']),
+        $make_30_cols([1 => 'SUMMARY OF CSM', 12 => 'CLIENT SATISFACTION MEASUREMENT (CSM)']),
+        $make_30_cols([]),
+        [
+            '', 'DATA ENTRY SUMMARY', '', '', '',
+            'CSM Control No.', 'Internal or External', 'Month', 'Date', 'No.', '', 'Internal or External',
+            'Uri ng Kliyente', 'Kasarian', 'Edad', 'Rehiyon ng Tirahan', 'Services Availed',
+            'CC1', 'CC2', 'CC3', 'SQD0', 'SQD1', 'SQD2', 'SQD3', 'SQD4', 'SQD5', 'SQD6', 'SQD7', 'SQD8',
+            'Suggestions/Comments'
+        ]
+    ];
+
+    $full_rows = $top_rows;
+    $max_data_len = max(count($summary_rows), count($raw_data_rows));
+
+    for ($i = 0; $i < $max_data_len; $i++) {
+        $s = $summary_rows[$i] ?? ['', '', ''];
+        $d = $raw_data_rows[$i] ?? array_fill(0, 25, '');
+
+        $row = array_merge(
+            ['', $s[0], $s[1], $s[2], ''],
+            $d
+        );
+        $full_rows[] = $row;
+    }
+
+    $tsv_lines = [];
+    foreach ($full_rows as $r) {
+        $tsv_lines[] = implode("\t", $r);
+    }
+    $tsv_full = implode("\r\n", $tsv_lines);
+
+    $data_only_headers = [
+        'CSM Control No.', 'Internal or External', 'Month', 'Date', 'No.', '', 'Internal or External',
+        'Uri ng Kliyente', 'Kasarian', 'Edad', 'Rehiyon ng Tirahan', 'Services Availed',
+        'CC1', 'CC2', 'CC3', 'SQD0', 'SQD1', 'SQD2', 'SQD3', 'SQD4', 'SQD5', 'SQD6', 'SQD7', 'SQD8', 'Suggestions/Comments'
+    ];
+    $data_only_lines = [implode("\t", $data_only_headers)];
+    foreach ($raw_data_rows as $dr) {
+        $data_only_lines[] = implode("\t", $dr);
+    }
+    $tsv_data_only = implode("\r\n", $data_only_lines);
+
+    $summary_headers = ['Category / Code', 'Description', 'Total'];
+    $summary_lines = [implode("\t", $summary_headers)];
+    foreach ($summary_rows as $sr) {
+        $summary_lines[] = implode("\t", $sr);
+    }
+    $tsv_summary_only = implode("\r\n", $summary_lines);
+
+    $csv_buffer = fopen('php://memory', 'r+');
+    foreach ($full_rows as $r) {
+        fputcsv($csv_buffer, $r);
+    }
+    rewind($csv_buffer);
+    $csv_full = stream_get_contents($csv_buffer);
+    fclose($csv_buffer);
+
+    return [
+        'month'            => $month,
+        'month_label'      => $month_full,
+        'total_records'    => $total_cnt,
+        'tsv_full'         => $tsv_full,
+        'tsv_data_only'    => $tsv_data_only,
+        'tsv_summary_only' => $tsv_summary_only,
+        'csv_full'         => $csv_full
+    ];
+}
+
+// 1b. HANDLE AJAX COPY & EXPORT REQUESTS (EXCEL TSV & CSV)
+if (isset($_GET['action']) && in_array($_GET['action'], ['get_csm_export', 'download_csm_csv']) && !empty($_GET['month'])) {
+    $req_month = trim($_GET['month']);
+    if (!preg_match('/^\d{4}-\d{2}$/', $req_month)) {
+        if ($_GET['action'] === 'get_csm_export') {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['status' => 'error', 'message' => 'Invalid month format (YYYY-MM).']);
+            exit;
+        } else {
+            die('Invalid month format.');
+        }
+    }
+
+    $export_data = buildCsmExportData($pdo, $req_month);
+
+    if ($_GET['action'] === 'download_csm_csv') {
+        $filename = 'CSM_Records_' . $req_month . '.csv';
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        echo $export_data['csv_full'];
+        exit;
+    }
+
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'status'           => 'success',
+        'month'            => $export_data['month'],
+        'month_label'      => $export_data['month_label'],
+        'total_records'    => $export_data['total_records'],
+        'tsv_full'         => $export_data['tsv_full'],
+        'tsv_data_only'    => $export_data['tsv_data_only'],
+        'tsv_summary_only' => $export_data['tsv_summary_only']
+    ]);
+    exit;
+}
+
 // 2. HANDLE DELETE ALL BULK DATA
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_bulk_data'])) {
     try {
@@ -548,6 +923,64 @@ try {
             background-color: rgba(255, 255, 255, 0.03);
         }
 
+        /* EXPORT PREVIEW MODAL & DROPDOWN STYLING */
+        .export-preview-box {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 0.76rem;
+            line-height: 1.45;
+            background-color: #f8fafc;
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            white-space: pre;
+            overflow-x: auto;
+            color: var(--text-body);
+        }
+
+        [data-bs-theme="dark"] .export-preview-box {
+            background-color: #0b1120 !important;
+            color: #cbd5e1 !important;
+            border-color: #334155 !important;
+        }
+
+        [data-bs-theme="dark"] .modal-content {
+            background-color: #1e293b;
+            color: #f1f5f9;
+        }
+
+        [data-bs-theme="dark"] .modal-header,
+        [data-bs-theme="dark"] .modal-footer {
+            border-color: #334155 !important;
+        }
+
+        [data-bs-theme="dark"] .modal-title,
+        [data-bs-theme="dark"] .modal-body label {
+            color: #f1f5f9 !important;
+        }
+
+        [data-bs-theme="dark"] .dropdown-menu {
+            background-color: #1e293b;
+            border-color: #334155;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+        }
+
+        [data-bs-theme="dark"] .dropdown-item {
+            color: #cbd5e1;
+        }
+
+        [data-bs-theme="dark"] .dropdown-item:hover,
+        [data-bs-theme="dark"] .dropdown-item:focus {
+            background-color: rgba(255, 255, 255, 0.08);
+            color: #ffffff;
+        }
+
+        [data-bs-theme="dark"] .dropdown-item .text-dark {
+            color: #f1f5f9 !important;
+        }
+
+        [data-bs-theme="dark"] .dropdown-divider {
+            border-color: #334155;
+        }
+
         /* FORM CONTROLS IN SMART PANEL */
         .form-control-sm, .form-select-sm {
             border-radius: 8px;
@@ -810,7 +1243,7 @@ try {
                                 <th class="text-center">Bulk Generated</th>
                                 <th class="text-center">Real Citizen</th>
                                 <th class="text-center">Total Records</th>
-                                <th class="text-end">Actions</th>
+                                <th class="text-end">Actions & Export</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -843,9 +1276,82 @@ try {
                                         </span>
                                     </td>
                                     <td class="text-end">
-                                        <button type="button" class="btn btn-sm btn-outline-danger rounded-3 py-1 px-2.5 d-inline-flex align-items-center gap-1.5 fw-semibold" onclick="openWipeForMonth('<?= htmlspecialchars($mt['ym']) ?>')" title="Wipe records for <?= htmlspecialchars($mt['m_label']) ?>">
-                                            <i class="ph-bold ph-calendar-x"></i> Wipe Month
-                                        </button>
+                                        <div class="d-inline-flex align-items-center gap-1.5 flex-wrap justify-content-end">
+                                            <!-- Main Quick Copy Button -->
+                                            <button type="button" 
+                                                    class="btn btn-sm btn-outline-success rounded-3 py-1 px-2.5 d-inline-flex align-items-center gap-1.5 fw-semibold" 
+                                                    onclick="copyMonthData('<?= htmlspecialchars($mt['ym']) ?>', 'full', this)" 
+                                                    title="Copy Excel-ready CSM sheet for <?= htmlspecialchars($mt['m_label']) ?> (Ctrl+V into Excel)">
+                                                <i class="ph-bold ph-copy fs-6"></i>
+                                                <span>Copy Data</span>
+                                            </button>
+
+                                            <!-- Dropdown for more copy/export options -->
+                                            <div class="dropdown d-inline-block">
+                                                <button type="button" 
+                                                        class="btn btn-sm btn-light border rounded-3 py-1 px-2 text-muted" 
+                                                        data-bs-toggle="dropdown" 
+                                                        aria-expanded="false" 
+                                                        title="More export options for <?= htmlspecialchars($mt['m_label']) ?>">
+                                                    <i class="ph-bold ph-dots-three-vertical fs-6"></i>
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1.5 rounded-3" style="min-width: 230px; font-size: 0.85rem;">
+                                                    <li class="dropdown-header text-uppercase fw-bold text-muted" style="font-size: 0.68rem; letter-spacing: 0.05em;">
+                                                        <?= htmlspecialchars($mt['m_label']) ?> Export
+                                                    </li>
+                                                    <li>
+                                                        <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="copyMonthData('<?= htmlspecialchars($mt['ym']) ?>', 'full', this)">
+                                                            <i class="ph-bold ph-microsoft-excel-logo text-success fs-5"></i>
+                                                            <div>
+                                                                <div class="fw-semibold text-dark">Copy Full Sheet (Excel)</div>
+                                                                <div class="text-muted small" style="font-size: 0.72rem;">Summary on Left + Data on Right</div>
+                                                            </div>
+                                                        </button>
+                                                    </li>
+                                                    <li>
+                                                        <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="copyMonthData('<?= htmlspecialchars($mt['ym']) ?>', 'data_only', this)">
+                                                            <i class="ph-bold ph-table text-primary fs-5"></i>
+                                                            <div>
+                                                                <div class="fw-semibold text-dark">Copy Data Rows Only</div>
+                                                                <div class="text-muted small" style="font-size: 0.72rem;">Columns F to AD with headers</div>
+                                                            </div>
+                                                        </button>
+                                                    </li>
+                                                    <li>
+                                                        <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="copyMonthData('<?= htmlspecialchars($mt['ym']) ?>', 'summary_only', this)">
+                                                            <i class="ph-bold ph-chart-bar text-warning fs-5"></i>
+                                                            <div>
+                                                                <div class="fw-semibold text-dark">Copy Summary Tallies Only</div>
+                                                                <div class="text-muted small" style="font-size: 0.72rem;">ARTA Category Breakdown</div>
+                                                            </div>
+                                                        </button>
+                                                    </li>
+                                                    <li><hr class="dropdown-divider my-1"></li>
+                                                    <li>
+                                                        <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="admin_bulk.php?action=download_csm_csv&month=<?= urlencode($mt['ym']) ?>">
+                                                            <i class="ph-bold ph-file-csv text-info fs-5"></i>
+                                                            <div>
+                                                                <div class="fw-semibold text-dark">Download as CSV</div>
+                                                                <div class="text-muted small" style="font-size: 0.72rem;">Open directly in Excel/Sheets</div>
+                                                            </div>
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="openPreviewExportModal('<?= htmlspecialchars($mt['ym']) ?>', '<?= htmlspecialchars($mt['m_label']) ?>', <?= $totalCount ?>)">
+                                                            <i class="ph-bold ph-eye text-secondary fs-5"></i>
+                                                            <div>
+                                                                <div class="fw-semibold text-dark">Preview & Customize</div>
+                                                                <div class="text-muted small" style="font-size: 0.72rem;">Inspect columns before copying</div>
+                                                            </div>
+                                                        </button>
+                                                    </li>
+                                                </ul>
+                                            </div>
+
+                                            <button type="button" class="btn btn-sm btn-outline-danger rounded-3 py-1 px-2.5 d-inline-flex align-items-center gap-1.5 fw-semibold" onclick="openWipeForMonth('<?= htmlspecialchars($mt['ym']) ?>')" title="Wipe records for <?= htmlspecialchars($mt['m_label']) ?>">
+                                                <i class="ph-bold ph-calendar-x"></i> Wipe Month
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -933,6 +1439,102 @@ try {
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- EXPORT PREVIEW & COPY MODAL -->
+<div class="modal fade" id="exportPreviewModal" tabindex="-1" aria-labelledby="exportPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-header border-bottom px-4 pt-4 pb-3">
+                <div class="d-flex align-items-center gap-2.5">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center bg-success-subtle text-success" style="width: 42px; height: 42px;">
+                        <i class="ph-bold ph-microsoft-excel-logo fs-4"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark fs-6 mb-0" id="exportPreviewModalLabel">
+                            CSM Excel Export & Clipboard Generator
+                        </h5>
+                        <p class="text-muted small mb-0" id="exportModalSubtitle">
+                            Ready-to-paste spreadsheet formatted according to Provincial Assessor's Office CSM standards
+                        </p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body px-4 py-3">
+                <!-- Nav tabs -->
+                <ul class="nav nav-pills mb-3 gap-2 border-bottom pb-2" id="exportTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active rounded-pill fw-semibold py-1.5 px-3 small" id="tab-full-btn" data-bs-toggle="pill" data-bs-target="#tab-full" type="button" role="tab" onclick="switchPreviewMode('full')">
+                            <i class="ph-bold ph-microsoft-excel-logo me-1"></i> Full Excel Sheet (Side-by-Side)
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link rounded-pill fw-semibold py-1.5 px-3 small" id="tab-data-btn" data-bs-toggle="pill" data-bs-target="#tab-data" type="button" role="tab" onclick="switchPreviewMode('data_only')">
+                            <i class="ph-bold ph-table me-1"></i> Data Rows Only (Cols F-AD)
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link rounded-pill fw-semibold py-1.5 px-3 small" id="tab-summary-btn" data-bs-toggle="pill" data-bs-target="#tab-summary" type="button" role="tab" onclick="switchPreviewMode('summary_only')">
+                            <i class="ph-bold ph-chart-bar me-1"></i> ARTA Summary Breakdown
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Stats banner -->
+                <div class="d-flex align-items-center justify-content-between p-2.5 mb-3 bg-light rounded-3 border flex-wrap gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-success-subtle text-success fw-bold px-2.5 py-1.5" id="exportModalBadgeMonth">Month</span>
+                        <span class="badge bg-secondary-subtle text-secondary fw-bold px-2.5 py-1.5" id="exportModalBadgeCount">0 Records</span>
+                        <span class="text-muted small d-none d-sm-inline">Separated by Tabs (<code>\t</code>) & Newlines (<code>\r\n</code>) for instant Excel column splitting</span>
+                    </div>
+                    <div class="text-muted small">
+                        Paste anywhere in Excel using <kbd class="bg-dark text-white px-2 py-0.5 rounded">Ctrl + V</kbd>
+                    </div>
+                </div>
+
+                <!-- Preview Area -->
+                <div class="position-relative">
+                    <div id="exportLoadingSpinner" class="text-center py-5 d-none">
+                        <i class="ph-bold ph-spinner-gap spin text-primary fs-1 mb-2"></i>
+                        <p class="text-muted small fw-semibold">Preparing formatted export data...</p>
+                    </div>
+                    <textarea id="exportPreviewTextarea" class="form-control export-preview-box text-nowrap" rows="14" readonly style="resize: vertical;"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-top px-4 py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div class="text-muted small">
+                    <i class="ph-bold ph-info text-primary me-1"></i> Tip: Select cell <strong>A1</strong> in your Excel sheet before pressing <kbd>Ctrl+V</kbd>.
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-sm btn-light border fw-semibold px-3 py-2 rounded-3" data-bs-dismiss="modal">Close</button>
+                    <a id="modalDownloadCsvBtn" href="#" class="btn btn-sm btn-outline-primary fw-semibold px-3 py-2 rounded-3 d-inline-flex align-items-center gap-1.5">
+                        <i class="ph-bold ph-download-simple"></i> Download CSV
+                    </a>
+                    <button type="button" id="modalCopyBtn" class="btn btn-sm btn-success fw-bold px-4 py-2 rounded-3 d-inline-flex align-items-center gap-1.5 shadow-sm" onclick="copyModalCurrentContent()">
+                        <i class="ph-bold ph-copy"></i>
+                        <span id="modalCopyBtnText">Copy to Clipboard</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- COPY SUCCESS TOAST NOTIFICATION -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1090;">
+    <div id="csmCopyToast" class="toast align-items-center text-bg-dark border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true" style="border-radius: 12px;">
+        <div class="d-flex align-items-center">
+            <div class="toast-body d-flex align-items-center gap-2.5 py-2.5 px-3">
+                <i class="ph-bold ph-check-circle text-success fs-5"></i>
+                <div>
+                    <div class="fw-bold text-white small" id="csmCopyToastTitle">Copied to Clipboard!</div>
+                    <div class="text-white-50 small" id="csmCopyToastMsg" style="font-size: 0.78rem;">Paste into Excel with Ctrl+V</div>
+                </div>
+            </div>
+            <button type="button" class="btn-close btn-close-white me-3 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
         </div>
     </div>
 </div>
@@ -1204,6 +1806,175 @@ try {
         $('#sidebar').toggleClass('collapsed show-mobile');
         $('#main-content').toggleClass('expanded');
     });
+
+    // ==========================================
+    // CSM EXCEL EXPORT & CLIPBOARD SYSTEM
+    // ==========================================
+    let csmExportCache = {};
+    let currentModalYm = '';
+    let currentPreviewMode = 'full';
+
+    async function copyToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            return await navigator.clipboard.writeText(text);
+        } else {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-999999px";
+            textArea.style.top = "-999999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            return new Promise((resolve, reject) => {
+                document.execCommand('copy') ? resolve() : reject(new Error('Copy failed'));
+                textArea.remove();
+            });
+        }
+    }
+
+    function showCopyToast(title, message) {
+        $('#csmCopyToastTitle').text(title || 'Copied to Clipboard!');
+        $('#csmCopyToastMsg').text(message || 'Ready to paste into Excel (Ctrl+V)');
+        const toastEl = document.getElementById('csmCopyToast');
+        if (toastEl) {
+            const toast = bootstrap.Toast.getOrCreateInstance(toastEl, { delay: 3500 });
+            toast.show();
+        }
+    }
+
+    async function fetchMonthExport(ym) {
+        if (csmExportCache[ym]) {
+            return csmExportCache[ym];
+        }
+        const response = await fetch(`admin_bulk.php?action=get_csm_export&month=${encodeURIComponent(ym)}`);
+        if (!response.ok) throw new Error('Network error loading export data.');
+        const data = await response.json();
+        if (data.status !== 'success') throw new Error(data.message || 'Export error');
+        csmExportCache[ym] = data;
+        return data;
+    }
+
+    async function copyMonthData(ym, mode, btn) {
+        mode = mode || 'full';
+        const originalHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="ph-bold ph-spinner-gap spin fs-6"></i> <span>Copying...</span>`;
+        }
+
+        try {
+            const data = await fetchMonthExport(ym);
+            let textToCopy = '';
+            let label = '';
+            if (mode === 'data_only') {
+                textToCopy = data.tsv_data_only;
+                label = 'Data Rows Only';
+            } else if (mode === 'summary_only') {
+                textToCopy = data.tsv_summary_only;
+                label = 'Summary Breakdown';
+            } else {
+                textToCopy = data.tsv_full;
+                label = 'Full Excel Sheet';
+            }
+
+            await copyToClipboard(textToCopy);
+
+            if (btn) {
+                btn.innerHTML = `<i class="ph-bold ph-check text-success fs-6"></i> <span class="text-success">Copied!</span>`;
+                setTimeout(() => {
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                }, 2500);
+            }
+
+            showCopyToast(
+                `Copied ${data.month_label} (${label})!`,
+                `Ready to paste into Microsoft Excel or Google Sheets (Ctrl+V).`
+            );
+        } catch (err) {
+            console.error(err);
+            if (btn) {
+                btn.innerHTML = `<i class="ph-bold ph-warning text-danger fs-6"></i> <span>Failed</span>`;
+                setTimeout(() => {
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                }, 2500);
+            }
+            alert('Could not copy export data: ' + err.message);
+        }
+    }
+
+    async function openPreviewExportModal(ym, label, count) {
+        currentModalYm = ym;
+        currentPreviewMode = 'full';
+
+        $('#exportModalBadgeMonth').text(label || ym);
+        $('#exportModalBadgeCount').text((count || 0) + ' Records');
+        $('#modalDownloadCsvBtn').attr('href', `admin_bulk.php?action=download_csm_csv&month=${encodeURIComponent(ym)}`);
+
+        // Reset tabs to Full
+        const tabBtn = document.getElementById('tab-full-btn');
+        if (tabBtn) {
+            bootstrap.Tab.getOrCreateInstance(tabBtn).show();
+        }
+
+        const modalEl = document.getElementById('exportPreviewModal');
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+
+        $('#exportLoadingSpinner').removeClass('d-none');
+        $('#exportPreviewTextarea').addClass('d-none');
+
+        try {
+            const data = await fetchMonthExport(ym);
+            $('#exportLoadingSpinner').addClass('d-none');
+            $('#exportPreviewTextarea').removeClass('d-none');
+            updateModalPreviewText(data);
+        } catch (err) {
+            $('#exportLoadingSpinner').addClass('d-none');
+            $('#exportPreviewTextarea').removeClass('d-none').val('Error loading export preview: ' + err.message);
+        }
+    }
+
+    function switchPreviewMode(mode) {
+        currentPreviewMode = mode;
+        if (csmExportCache[currentModalYm]) {
+            updateModalPreviewText(csmExportCache[currentModalYm]);
+        }
+    }
+
+    function updateModalPreviewText(data) {
+        let txt = '';
+        if (currentPreviewMode === 'data_only') {
+            txt = data.tsv_data_only;
+        } else if (currentPreviewMode === 'summary_only') {
+            txt = data.tsv_summary_only;
+        } else {
+            txt = data.tsv_full;
+        }
+        $('#exportPreviewTextarea').val(txt);
+    }
+
+    async function copyModalCurrentContent() {
+        const txt = $('#exportPreviewTextarea').val();
+        if (!txt) return;
+
+        const btn = $('#modalCopyBtn');
+        const originalText = $('#modalCopyBtnText').text();
+        btn.prop('disabled', true);
+        $('#modalCopyBtnText').text('Copied!');
+        btn.find('i').removeClass('ph-copy').addClass('ph-check');
+
+        await copyToClipboard(txt);
+        showCopyToast('Copied to Clipboard!', 'Spreadsheet format ready for Ctrl+V in Excel.');
+
+        setTimeout(() => {
+            $('#modalCopyBtnText').text(originalText);
+            btn.find('i').removeClass('ph-check').addClass('ph-copy');
+            btn.prop('disabled', false);
+        }, 2000);
+    }
 </script>
 <script src="darkmode.js"></script>
 </body>
