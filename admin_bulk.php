@@ -684,7 +684,7 @@ try {
                     </div>
                     <div>
                         <h6 class="card-title-clean">Smart Assessment Generator</h6>
-                        <span class="text-muted" style="font-size: 0.76rem;">Directly generates and commits synthetic survey records to the database. Excludes PH holidays & weekends.</span>
+                        <span class="text-muted" style="font-size: 0.76rem;">Directly generates and commits synthetic survey records with prioritized 4 & 5 ratings. Excludes PH holidays & weekends.</span>
                     </div>
                 </div>
                 
@@ -704,8 +704,9 @@ try {
             <form id="generatorForm" method="POST" action="admin_bulk.php">
                 <input type="hidden" name="bulk_json" id="bulkJsonInput" value="">
                 
+                <!-- Row 1: Target Month, Record Count, Client Type, SQD Rating Priority -->
                 <div class="row g-3 align-items-end pt-2">
-                    <div class="col-md-2 col-sm-6">
+                    <div class="col-md-3 col-sm-6">
                         <label class="form-label text-muted small fw-bold mb-1">Target Month</label>
                         <input type="month" id="genMonth" class="form-control form-control-sm fw-semibold" value="<?= date('Y-m') ?>" required>
                     </div>
@@ -713,7 +714,7 @@ try {
                         <label class="form-label text-muted small fw-bold mb-1">Record Count</label>
                         <input type="number" id="genCount" class="form-control form-control-sm fw-semibold" value="10" min="1" max="500" required>
                     </div>
-                    <div class="col-md-2 col-sm-6">
+                    <div class="col-md-3 col-sm-6">
                         <label class="form-label text-muted small fw-bold mb-1">Client Type</label>
                         <select id="genClient" class="form-select form-select-sm fw-semibold">
                             <option value="Random">🎲 Randomize (Weighted)</option>
@@ -722,7 +723,21 @@ try {
                             <option value="Government">Government Only</option>
                         </select>
                     </div>
-                    <div class="col-md-3 col-sm-6">
+                    <div class="col-md-4 col-sm-6">
+                        <label class="form-label text-muted small fw-bold mb-1">SQD Rating (Quality)</label>
+                        <select id="genSqd" class="form-select form-select-sm fw-semibold">
+                            <option value="Prioritize45" selected>⭐ Prioritize 4 & 5 (Weighted: ~65% 5s, ~35% 4s)</option>
+                            <option value="NaturalMix">🎲 Natural Mix (60% 5s, 35% 4s, 5% 3s)</option>
+                            <option value="Balanced45">⚖️ Balanced 4 & 5 (50% 5s, 50% 4s)</option>
+                            <option value="All5">🌟 All 5s Only (100% Strongly Agree)</option>
+                            <option value="All4">👍 All 4s Only (100% Agree)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Row 2: Municipality / City & Transaction Type -->
+                <div class="row g-3 align-items-end pt-2 mt-0">
+                    <div class="col-md-6 col-sm-12">
                         <label class="form-label text-muted small fw-bold mb-1">Municipality / City</label>
                         <select id="genMuni" class="form-select form-select-sm fw-semibold">
                             <option value="Random">🎲 Randomize (All Isabela)</option>
@@ -731,7 +746,7 @@ try {
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="col-md-3 col-sm-12">
+                    <div class="col-md-6 col-sm-12">
                         <label class="form-label text-muted small fw-bold mb-1">Transaction Type</label>
                         <select id="genTransaction" class="form-select form-select-sm fw-semibold">
                             <option value="Random">🎲 Randomize (All 13 Types Evenly)</option>
@@ -748,7 +763,7 @@ try {
                 <div class="d-flex align-items-center justify-content-between pt-3 mt-3 border-top flex-wrap gap-3">
                     <div class="d-flex align-items-center gap-2 text-muted small">
                         <i class="ph-bold ph-info text-primary fs-5"></i>
-                        <span>Generates realistic data with control numbers (<code class="text-primary fw-bold">E{MM}-{seq}B</code>) and saves directly to database in real time.</span>
+                        <span>Generates realistic data with prioritized 4 & 5 SQD scores (<code class="text-primary fw-bold">E{MM}-{seq}B</code>) and saves directly to database in real time.</span>
                     </div>
                     <button type="submit" id="generateBtn" class="btn-modern-primary py-2 px-4 fw-bold shadow-sm d-inline-flex align-items-center gap-2">
                         <i class="ph-bold ph-lightning text-warning fs-5"></i>
@@ -1003,6 +1018,57 @@ try {
         return others[Math.floor(Math.random() * others.length)];
     }
 
+    // WEIGHTED RANDOM GENERATOR FOR SQD0 TO SQD8 (PRIORITIZING 4 AND 5)
+    function generateSqdScores(sqdMode) {
+        if (sqdMode === "All5") {
+            return { sqd0: "5", sqd1: "5", sqd2: "5", sqd3: "5", sqd4: "5", sqd5: "5", sqd6: "5", sqd7: "5", sqd8: "5" };
+        }
+        if (sqdMode === "All4") {
+            return { sqd0: "4", sqd1: "4", sqd2: "4", sqd3: "4", sqd4: "4", sqd5: "4", sqd6: "4", sqd7: "4", sqd8: "4" };
+        }
+
+        // Establish respondent baseline profile for realistic human survey coherence
+        let primaryScore, secondaryScore;
+        const roll = Math.random();
+
+        if (sqdMode === "Balanced45") {
+            // 50% 5s, 50% 4s
+            primaryScore = roll < 0.50 ? "5" : "4";
+            secondaryScore = primaryScore === "5" ? "4" : "5";
+        } else if (sqdMode === "NaturalMix") {
+            // 60% 5s, 35% 4s, 5% 3s
+            primaryScore = roll < 0.60 ? "5" : (roll < 0.95 ? "4" : "3");
+            secondaryScore = primaryScore === "5" ? "4" : "5";
+        } else {
+            // Default "Prioritize45": Prioritize 4 and 5 with strong 5/4 weighting (~65% 5s, ~35% 4s)
+            primaryScore = roll < 0.65 ? "5" : "4";
+            secondaryScore = primaryScore === "5" ? "4" : "5";
+        }
+
+        // Helper to roll each dimension with high coherence towards the respondent's primary rating
+        const getScore = () => {
+            const r = Math.random();
+            if (sqdMode === "NaturalMix" && primaryScore !== "3") {
+                if (r < 0.82) return primaryScore;
+                if (r < 0.96) return secondaryScore;
+                return "3";
+            }
+            return r < 0.85 ? primaryScore : secondaryScore;
+        };
+
+        return {
+            sqd0: primaryScore,
+            sqd1: getScore(),
+            sqd2: getScore(),
+            sqd3: getScore(),
+            sqd4: getScore(),
+            sqd5: getScore(),
+            sqd6: getScore(),
+            sqd7: getScore(),
+            sqd8: getScore()
+        };
+    }
+
     // DIRECT GENERATOR & DATABASE SUBMISSION
     $('#generatorForm').on('submit', function(e) {
         e.preventDefault();
@@ -1010,6 +1076,7 @@ try {
         const count = parseInt($('#genCount').val()) || 10;
         const monthVal = $('#genMonth').val(); // e.g. "2026-10"
         const clientMode = $('#genClient').val();
+        const sqdMode = $('#genSqd').val() || 'Prioritize45';
         const transMode = $('#genTransaction').val();
         const muniMode = $('#genMuni').val();
 
@@ -1029,7 +1096,6 @@ try {
         const genders = ["Male", "Female"]; 
         const ages = ["15-19", "20-29", "30-39", "40-49", "50-59", "60+"];
         const ccScores = ["3", "4"];
-        const sqdScores = ["4", "5"];
 
         const records = [];
         for (let i = 0; i < count; i++) {
@@ -1048,8 +1114,8 @@ try {
             const rMuni = muniMode === "Random" ? isabelaLocations[Math.floor(Math.random() * isabelaLocations.length)] : muniMode;
             const rGender = genders[Math.floor(Math.random() * genders.length)];
             const rAge = ages[Math.floor(Math.random() * ages.length)];
-            const getRandSqd = () => sqdScores[Math.floor(Math.random() * sqdScores.length)];
             const getRandCc = () => ccScores[Math.floor(Math.random() * ccScores.length)];
+            const sqd = generateSqdScores(sqdMode);
 
             records.push({
                 survey_date:      rDate,
@@ -1063,15 +1129,15 @@ try {
                 cc1:              getRandCc(),
                 cc2:              getRandCc(),
                 cc3:              getRandCc(),
-                sqd0:             getRandSqd(),
-                sqd1:             getRandSqd(),
-                sqd2:             getRandSqd(),
-                sqd3:             getRandSqd(),
-                sqd4:             getRandSqd(),
-                sqd5:             getRandSqd(),
-                sqd6:             getRandSqd(),
-                sqd7:             getRandSqd(),
-                sqd8:             getRandSqd()
+                sqd0:             sqd.sqd0,
+                sqd1:             sqd.sqd1,
+                sqd2:             sqd.sqd2,
+                sqd3:             sqd.sqd3,
+                sqd4:             sqd.sqd4,
+                sqd5:             sqd.sqd5,
+                sqd6:             sqd.sqd6,
+                sqd7:             sqd.sqd7,
+                sqd8:             sqd.sqd8
             });
         }
 
