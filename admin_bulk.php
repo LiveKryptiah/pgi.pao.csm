@@ -529,7 +529,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['wipe_month_data'])) {
 
 // 3. HANDLE BULK SUBMISSION (Single JSON payload bypasses PHP max_input_vars limit entirely)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['bulk_json']) || isset($_POST['survey_date']))) {
-    try {
+    if (empty($_POST['save_to_database'])) {
+        $error_msg = "Database insert was skipped because 'Save to Database (Neon)' was disabled.";
+    } else {
+        try {
         $records = [];
         if (!empty($_POST['bulk_json'])) {
             $decoded = json_decode($_POST['bulk_json'], true);
@@ -636,6 +639,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['bulk_json']) || iss
         }
         $error_msg = "Database Error: " . $e->getMessage();
     }
+}
 }
 
 // 4. RETRIEVE MONTH TALLIES (Executed after all POST operations so tallies immediately reflect new records)
@@ -1256,18 +1260,27 @@ try {
                 </div>
 
                 <div class="d-flex align-items-center justify-content-between pt-3 mt-3 border-top flex-wrap gap-3">
-                    <div class="d-flex align-items-center gap-2 text-muted small">
-                        <i class="ph-bold ph-info text-primary fs-5"></i>
-                        <span>Generates realistic data with prioritized 4 & 5 SQD scores (<code class="text-primary fw-bold">E{MM}-{seq}B</code>) and saves directly to database in real time.</span>
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <!-- Neon Database Protection Toggle Switch -->
+                        <div class="form-check form-switch mb-0 d-inline-flex align-items-center gap-2 bg-light px-3 py-2 rounded-3 border shadow-sm">
+                            <input class="form-check-input ms-0 mt-0" type="checkbox" id="saveToDbToggle" name="save_to_database" value="1" style="cursor: pointer; width: 2.2em; height: 1.2em;">
+                            <label class="form-check-label fw-bold small text-dark" for="saveToDbToggle" style="cursor: pointer;">
+                                Save to Database (Neon)
+                            </label>
+                        </div>
+                        <div id="genModeNotice" class="d-flex align-items-center gap-1.5 text-success small fw-semibold">
+                            <i class="ph-bold ph-shield-check fs-5"></i>
+                            <span>Protected: Generates in-memory for Excel copy. Zero records inserted into Neon.</span>
+                        </div>
                     </div>
-                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <div class="d-flex align-items-center gap-2 flex-wrap ms-auto">
                         <button type="button" class="btn btn-outline-success fw-bold py-2 px-3 rounded-3 d-inline-flex align-items-center gap-2" onclick="copyCurrentTargetMonth(this)" title="Copy 25-column CSM data table for selected Target Month">
                             <i class="ph-bold ph-copy fs-5"></i>
                             <span>Copy Target Month Data</span>
                         </button>
                         <button type="submit" id="generateBtn" class="btn-modern-primary py-2 px-4 fw-bold shadow-sm d-inline-flex align-items-center gap-2">
-                            <i class="ph-bold ph-lightning text-warning fs-5"></i>
-                            <span id="generateBtnText">Generate & Save to Database</span>
+                            <i id="generateBtnIcon" class="ph-bold ph-sparkle text-warning fs-5"></i>
+                            <span id="generateBtnText">Generate & Copy for Excel</span>
                         </button>
                     </div>
                 </div>
@@ -1742,8 +1755,216 @@ try {
         };
     }
 
-    // DIRECT GENERATOR & DATABASE SUBMISSION
-    $('#generatorForm').on('submit', function(e) {
+    // Helper to download a CSV string in-memory without contacting server
+    function downloadCsvString(filename, csvContent) {
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            a.remove();
+            URL.revokeObjectURL(url);
+        }, 100);
+    }
+
+    // Value mapping helpers matching PAO Isabela Excel CSM rules
+    function mapClient(ctype) {
+        const c = String(ctype || '').toLowerCase().trim();
+        if (c.includes('citizen') || c.includes('mamayan') || c.includes('mamamayan')) return 1;
+        if (c.includes('business') || c.includes('negosyo')) return 2;
+        if (c.includes('government') || c.includes('gobyerno')) return 3;
+        return 4;
+    }
+
+    function mapGender(gender) {
+        const g = String(gender || '').toLowerCase().trim();
+        if (g === 'male' || g.includes('lalak')) return 1;
+        if (g === 'female' || g.includes('babae')) return 2;
+        return 3;
+    }
+
+    function mapAge(age) {
+        const a = String(age || '').toLowerCase().trim();
+        if (a === '15-19' || a.includes('19')) return 1;
+        if (a === '20-29' || a === '20-34' || a === '20-30') return 2;
+        if (a === '30-39' || a === '35-49') return 3;
+        if (a === '40-49' || a === '50-64' || a === '50-59') return 4;
+        if (a.includes('60+') || a.includes('65')) return 5;
+        return 6;
+    }
+
+    function mapService(trans) {
+        const t = String(trans || '').toLowerCase().trim();
+        if (t.includes('transfer')) return 1;
+        if (t.includes('subdivision') || t.includes('consolidation')) return 2;
+        if (t.includes('agri to urban')) return 3;
+        if (t.includes('urban to urban')) return 4;
+        if (t.includes('reassessment') || t.includes('dp') || t.includes('pc')) return 5;
+        if (t.includes('discovery') || t.includes('declaration')) return 6;
+        if (t.includes('certification') || t.includes('ctc') || t.includes('cpc') || t.includes('photocopy') || t.includes('certificate')) return 7;
+        if (t.includes('verification') || t.includes('back') || t.includes('tracking') || t.includes('tracing')) return 8;
+        if (t.includes('annotation')) return 9;
+        if (t.includes('ocular')) return 10;
+        if (t.includes('cancellation of td')) return 11;
+        if (t.includes('tmcr') || t.includes('map')) return 12;
+        if (t.includes('posting')) return 13;
+        return 7;
+    }
+
+    function mapCc1(v) {
+        const s = String(v || '').toLowerCase().trim();
+        if (s === '1' || (s.includes('nakita') && s.includes('alam'))) return 1;
+        if (s === '2' || (s.includes('hindi') && s.includes('nakita'))) return 2;
+        if (s === '3' || s.includes('nalaman')) return 3;
+        if (s === '4' || s.includes('hindi alam')) return 4;
+        return 1;
+    }
+
+    function mapCc2(v) {
+        const s = String(v || '').toLowerCase().trim();
+        if (s === '1' || (s.includes('madaling') && !s.includes('medyo')) || s.includes('easy')) return 1;
+        if (s === '2' || s.includes('medyo')) return 2;
+        if (s === '3' || s.includes('mahirap') || s.includes('diffic')) return 3;
+        if (s === '4' || s.includes('not visible') || (s.includes('hindi') && s.includes('makita'))) return 4;
+        if (s === '5' || s === 'n/a') return 5;
+        return 1;
+    }
+
+    function mapCc3(v) {
+        const s = String(v || '').toLowerCase().trim();
+        if (s === '1' || s.includes('sobrang') || s.includes('very')) return 1;
+        if (s === '2' || s.includes('naman') || s.includes('somewhat')) return 2;
+        if (s === '3' || s.includes('hindi') || s.includes('did not')) return 3;
+        if (s === '4' || s === 'n/a') return 4;
+        return 1;
+    }
+
+    function mapSqd(v) {
+        const s = String(v || '').trim();
+        if (s === '5') return 5;
+        if (s === '4') return 4;
+        if (s === '3') return 3;
+        if (s === '2') return 2;
+        if (s === '1') return 1;
+        if (s === '6' || s.toUpperCase() === 'N/A') return 6;
+        return 5;
+    }
+
+    // Build virtual CSM Export (In-memory, Zero Neon Inserts)
+    function buildVirtualCsmExport(monthVal, rawRecords) {
+        const sorted = [...rawRecords].sort((a, b) => (a.survey_date || '').localeCompare(b.survey_date || ''));
+        const parts = monthVal.split('-');
+        const year = parts[0];
+        const monthNum = parts[1];
+        const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+        const monthFullNames = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ];
+        const mIdx = parseInt(monthNum, 10) - 1;
+        const monthAbbr = monthNames[mIdx] || "OCT";
+        const monthFull = `${monthFullNames[mIdx] || "October"} ${year}`;
+
+        const dataOnlyHeaders = [
+            'CSM Control No.', 'Internal or External', 'Month', 'Date', 'No.', '', 'Internal or External',
+            'Uri ng Kliyente', 'Kasarian', 'Edad', 'Rehiyon ng Tirahan', 'Services Availed',
+            'CC1', 'CC2', 'CC3', 'SQD0', 'SQD1', 'SQD2', 'SQD3', 'SQD4', 'SQD5', 'SQD6', 'SQD7', 'SQD8', 'Suggestions/Comments'
+        ];
+
+        const dataRows = [];
+        const csvRows = [dataOnlyHeaders];
+
+        sorted.forEach((r, idx) => {
+            const seq = idx + 1;
+            const ctrlNo = `E${monthNum}-${String(seq).padStart(3, '0')}`;
+            let dateDay = 1;
+            if (r.survey_date) {
+                const dp = r.survey_date.split('-');
+                if (dp.length === 3) dateDay = parseInt(dp[2], 10) || 1;
+            }
+
+            const comments = (r.suggestions || '').replace(/[\r\n\t]+/g, ' ').trim();
+
+            const row = [
+                ctrlNo,
+                'E',
+                monthAbbr,
+                dateDay,
+                seq,
+                '',
+                '1',
+                mapClient(r.client_type),
+                mapGender(r.gender),
+                mapAge(r.age_group),
+                '',
+                mapService(r.transaction_type),
+                mapCc1(r.cc1),
+                mapCc2(r.cc2),
+                mapCc3(r.cc3),
+                mapSqd(r.sqd0),
+                mapSqd(r.sqd1),
+                mapSqd(r.sqd2),
+                mapSqd(r.sqd3),
+                mapSqd(r.sqd4),
+                mapSqd(r.sqd5),
+                mapSqd(r.sqd6),
+                mapSqd(r.sqd7),
+                mapSqd(r.sqd8),
+                comments
+            ];
+            dataRows.push(row);
+            csvRows.push(row);
+        });
+
+        const dataOnlyLines = dataRows.map(r => r.join("\t"));
+        const tsvDataOnly = dataOnlyLines.join("\r\n");
+        const tsvDataWithHeaders = [dataOnlyHeaders.join("\t"), ...dataOnlyLines].join("\r\n");
+
+        const csvContent = csvRows.map(r => r.map(val => {
+            const s = String(val ?? '');
+            if (s.includes(',') || s.includes('"') || s.includes("\n") || s.includes("\r")) {
+                return `"${s.replace(/"/g, '""')}"`;
+            }
+            return s;
+        }).join(',')).join("\r\n");
+
+        return {
+            status: 'success',
+            is_virtual: true,
+            month: monthVal,
+            month_label: monthFull,
+            total_records: sorted.length,
+            tsv_full: tsvDataWithHeaders,
+            tsv_data_only: tsvDataOnly,
+            tsv_data_with_headers: tsvDataWithHeaders,
+            tsv_summary_only: '',
+            csv_data_only: csvContent
+        };
+    }
+
+    // TOGGLE SAVE TO DATABASE (NEON) SWITCH
+    $('#saveToDbToggle').on('change', function() {
+        const isSaveToDb = $(this).is(':checked');
+        if (isSaveToDb) {
+            $('#generateBtnText').text('Generate & Save to Database');
+            $('#generateBtnIcon').removeClass('ph-sparkle text-warning').addClass('ph-cloud-arrow-up text-white');
+            $('#genModeNotice').removeClass('text-success').addClass('text-warning-emphasis').html(
+                '<i class="ph-bold ph-warning fs-5 text-warning"></i> <span>Notice: Will permanently insert records into Neon cloud database.</span>'
+            );
+        } else {
+            $('#generateBtnText').text('Generate & Copy for Excel');
+            $('#generateBtnIcon').removeClass('ph-cloud-arrow-up text-white').addClass('ph-sparkle text-warning');
+            $('#genModeNotice').removeClass('text-warning-emphasis').addClass('text-success').html(
+                '<i class="ph-bold ph-shield-check fs-5"></i> <span>Protected: Generates in-memory for Excel copy. Zero records inserted into Neon.</span>'
+            );
+        }
+    });
+
+    // DIRECT GENERATOR HANDLER (VIRTUAL OR DATABASE)
+    $('#generatorForm').on('submit', async function(e) {
         e.preventDefault();
 
         const count = parseInt($('#genCount').val()) || 10;
@@ -1752,6 +1973,7 @@ try {
         const sqdMode = $('#genSqd').val() || 'Prioritize45';
         const transMode = $('#genTransaction').val();
         const muniMode = $('#genMuni').val();
+        const isSaveToDb = $('#saveToDbToggle').is(':checked');
 
         if (!monthVal) {
             alert('Please select a Target Month first.');
@@ -1814,14 +2036,46 @@ try {
             });
         }
 
-        $('#bulkJsonInput').val(JSON.stringify(records));
+        if (isSaveToDb) {
+            // DATABASE SUBMISSION TO NEON
+            $('#bulkJsonInput').val(JSON.stringify(records));
+            const btn = $('#generateBtn');
+            btn.prop('disabled', true).css('opacity', '0.8');
+            $('#generateBtnText').text('Generating & Saving ' + count + ' Records...');
+            $('#generateBtnIcon').removeClass('ph-cloud-arrow-up text-white').addClass('ph-spinner-gap spin');
+            HTMLFormElement.prototype.submit.call(this);
+            return;
+        }
 
+        // VIRTUAL IN-MEMORY GENERATION (NO NEON INSERTS)
         const btn = $('#generateBtn');
         btn.prop('disabled', true).css('opacity', '0.8');
-        $('#generateBtnText').text('Generating & Saving ' + count + ' Records...');
-        btn.find('i').removeClass('ph-lightning text-warning').addClass('ph-spinner-gap spin');
+        $('#generateBtnText').text('Formatting ' + count + ' Records...');
+        $('#generateBtnIcon').removeClass('ph-sparkle text-warning').addClass('ph-spinner-gap spin');
 
-        HTMLFormElement.prototype.submit.call(this);
+        const virtualExport = buildVirtualCsmExport(monthVal, records);
+        csmExportCache[monthVal] = virtualExport;
+
+        // Auto-copy to clipboard
+        try {
+            await copyToClipboard(virtualExport.tsv_data_only);
+            const firstRowSample = (virtualExport.tsv_data_only.split('\n')[0] || '').split('\t')[0] || 'E10-001';
+            showCopyToast(
+                `Generated & Copied ${count} Records (${virtualExport.month_label})!`,
+                `Ready to paste into cell F15 in Excel (starts with ${firstRowSample}). Zero records inserted into Neon.`
+            );
+        } catch (copyErr) {
+            console.error('Clipboard copy error:', copyErr);
+        }
+
+        // Open preview modal
+        openPreviewExportModal(monthVal, virtualExport.month_label, virtualExport.total_records);
+
+        setTimeout(() => {
+            btn.prop('disabled', false).css('opacity', '1');
+            $('#generateBtnText').text('Generate & Copy for Excel');
+            $('#generateBtnIcon').removeClass('ph-spinner-gap spin').addClass('ph-sparkle text-warning');
+        }, 600);
     });
 
     function openWipeForMonth(ym) {
@@ -2004,6 +2258,12 @@ try {
         $('#exportModalBadgeMonth').text(label || ym);
         $('#exportModalBadgeCount').text((count || 0) + ' Records');
         $('#modalDownloadCsvBtn').attr('href', `admin_bulk.php?action=download_csm_csv&month=${encodeURIComponent(ym)}`);
+        $('#modalDownloadCsvBtn').off('click').on('click', function(e) {
+            if (csmExportCache[ym] && csmExportCache[ym].is_virtual && csmExportCache[ym].csv_data_only) {
+                e.preventDefault();
+                downloadCsvString(`CSM_DataTable_${ym}.csv`, csmExportCache[ym].csv_data_only);
+            }
+        });
         $('#includeHeadersToggle').prop('checked', false);
 
         // Reset tabs to Data Only
