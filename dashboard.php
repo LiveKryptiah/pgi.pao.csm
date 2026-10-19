@@ -690,7 +690,7 @@ $js_muni_data     = json_encode(array_values($municipality_tally));
         /* MODERN MINIMAL CARDS */
         .card-minimal {
             background: var(--bg-surface);
-            border: 1px solid var(--border-subtle);
+            border: none !important;
             border-radius: var(--radius-card);
             box-shadow: var(--shadow-card);
             padding: 24px;
@@ -732,7 +732,7 @@ $js_muni_data     = json_encode(array_values($municipality_tally));
 
         .stat-card {
             background: var(--bg-surface);
-            border: 1px solid var(--border-subtle);
+            border: none !important;
             border-radius: var(--radius-card);
             box-shadow: var(--shadow-card);
             padding: 20px 22px;
@@ -1173,10 +1173,9 @@ $js_muni_data     = json_encode(array_values($municipality_tally));
                 rgba(255, 255, 255, 0.85) 55%, 
                 rgba(248, 250, 252, 0.90) 80%, 
                 #f8fafc 100%) !important;
-            border: 1px solid rgba(226, 232, 240, 0.9) !important;
-            border-bottom: 1px solid transparent !important;
+            border: none !important;
             border-radius: var(--radius-card);
-            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
             transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
             overflow: hidden;
         }
@@ -1186,28 +1185,14 @@ $js_muni_data     = json_encode(array_values($municipality_tally));
             min-height: 380px;
         }
 
-        /* Border fade-out trick: 1px border that dissolves towards 0% at the bottom */
+        /* Stroke lines removed: suppress pseudo-element border masks */
         .card-calendar::before,
         .stat-card::before,
         #sec-dashboard .card-minimal::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            border-radius: inherit;
-            padding: 1px;
-            background: linear-gradient(180deg, 
-                rgba(226, 232, 240, 0.95) 0%, 
-                rgba(226, 232, 240, 0.65) 45%, 
-                rgba(226, 232, 240, 0.15) 80%, 
-                transparent 100%);
-            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-            -webkit-mask-composite: xor;
-            mask-composite: exclude;
-            pointer-events: none;
-            z-index: 1;
+            display: none !important;
         }
 
-        /* Ensure all interactive card content sits cleanly above gradient masks */
+        /* Ensure all interactive card content sits cleanly */
         .card-calendar > *,
         .stat-card > *,
         #sec-dashboard .card-minimal > * {
@@ -1221,27 +1206,17 @@ $js_muni_data     = json_encode(array_values($municipality_tally));
             border-bottom: none !important;
         }
 
-        /* Soft gradient divider for calendar footer so it dissolves naturally */
+        /* Borderless clean calendar footer without grey divider stroke */
         .card-calendar .calendar-footer {
             border-top: none !important;
             position: relative;
             padding-top: 10px;
         }
         .card-calendar .calendar-footer::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 5%;
-            right: 5%;
-            height: 1px;
-            background: linear-gradient(90deg, 
-                transparent 0%, 
-                rgba(226, 232, 240, 0.8) 25%, 
-                rgba(226, 232, 240, 0.8) 75%, 
-                transparent 100%);
+            display: none !important;
         }
 
-        /* DARK MODE: Seamless Fade to Dark Canvas (#07110c) */
+        /* DARK MODE: Seamless Fade to Dark Canvas (#07110c) - Zero Stroke Lines */
         [data-bs-theme="dark"] .card-calendar,
         [data-bs-theme="dark"] .stat-card,
         [data-bs-theme="dark"] #sec-dashboard .card-minimal {
@@ -1251,49 +1226,26 @@ $js_muni_data     = json_encode(array_values($municipality_tally));
                 rgba(13, 26, 19, 0.82) 60%, 
                 rgba(7, 17, 12, 0.92) 84%, 
                 #07110c 100%) !important;
-            border: 1px solid rgba(27, 47, 36, 0.85) !important;
-            border-bottom: 1px solid transparent !important;
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+            border: none !important;
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
         }
 
         [data-bs-theme="dark"] .card-calendar::before,
         [data-bs-theme="dark"] .stat-card::before,
         [data-bs-theme="dark"] #sec-dashboard .card-minimal::before {
-            background: linear-gradient(180deg, 
-                rgba(35, 62, 48, 0.95) 0%, 
-                rgba(27, 47, 36, 0.6) 45%, 
-                rgba(27, 47, 36, 0.15) 80%, 
-                transparent 100%);
+            display: none !important;
         }
 
         [data-bs-theme="dark"] .card-calendar .calendar-footer::before {
-            background: linear-gradient(90deg, 
-                transparent 0%, 
-                rgba(27, 47, 36, 0.75) 25%, 
-                rgba(27, 47, 36, 0.75) 75%, 
-                transparent 100%);
+            display: none !important;
         }
 
-        /* Subtle bottom border dissolve for greetingsCard in dark mode */
+        /* Suppress stroke lines on greetingsCard in dark mode */
         [data-bs-theme="dark"] #greetingsCard {
-            border-bottom: 1px solid transparent !important;
+            border: none !important;
         }
         [data-bs-theme="dark"] #greetingsCard::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            border-radius: inherit;
-            padding: 1px;
-            background: linear-gradient(180deg, 
-                rgba(52, 211, 153, 0.35) 0%, 
-                rgba(52, 211, 153, 0.15) 45%, 
-                rgba(52, 211, 153, 0.05) 80%, 
-                transparent 100%);
-            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-            -webkit-mask-composite: xor;
-            mask-composite: exclude;
-            pointer-events: none;
-            z-index: 1;
+            display: none !important;
         }
 
         .calendar-month-title {
