@@ -1150,26 +1150,46 @@ $js_muni_data     = json_encode(array_values($municipality_tally));
            3. Fading border gently dissolves to 0% opacity towards the bottom (no hard cutoff).
            4. Suppressed bottom shadow so the bottom boundary bleeds directly into the canvas.
            ========================================================================== */
-        .card-calendar {
+        /* ==========================================================================
+           SEAMLESS GRADIENT CARDS (GRADIENT FADE TO CANVAS / BOTTOM BLEED / BLUR)
+           Applied to:
+           - Calendar Section Card (.card-calendar / #calendarCard)
+           - Overview KPI Stat Cards (.stat-card)
+           - Overview Section Cards (#sec-dashboard .card-minimal)
+           
+           Leverages vertical contrast falloff to softly dissolve into the page canvas:
+           1. Top surface has crisp contrast & subtle top-edge highlight.
+           2. Multi-stop gradient seamlessly blends into the canvas background at the bottom.
+           3. Fading border gently dissolves to 0% opacity towards the bottom (no hard cutoff).
+           4. Suppressed bottom shadow so the bottom boundary bleeds directly into the canvas.
+           ========================================================================== */
+        .card-calendar,
+        .stat-card,
+        #sec-dashboard .card-minimal {
             position: relative;
             background: linear-gradient(180deg, 
                 #ffffff 0%, 
                 #ffffff 28%, 
                 rgba(255, 255, 255, 0.85) 55%, 
                 rgba(248, 250, 252, 0.90) 80%, 
-                #f8fafc 100%);
-            border: 1px solid rgba(226, 232, 240, 0.9);
-            border-bottom: 1px solid transparent;
+                #f8fafc 100%) !important;
+            border: 1px solid rgba(226, 232, 240, 0.9) !important;
+            border-bottom: 1px solid transparent !important;
             border-radius: var(--radius-card);
-            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-            padding: 24px 26px;
-            min-height: 380px;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
             transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
             overflow: hidden;
         }
 
+        .card-calendar {
+            padding: 24px 26px;
+            min-height: 380px;
+        }
+
         /* Border fade-out trick: 1px border that dissolves towards 0% at the bottom */
-        .card-calendar::before {
+        .card-calendar::before,
+        .stat-card::before,
+        #sec-dashboard .card-minimal::before {
             content: '';
             position: absolute;
             inset: 0;
@@ -1187,10 +1207,18 @@ $js_muni_data     = json_encode(array_values($municipality_tally));
             z-index: 1;
         }
 
-        /* Ensure all interactive calendar content sits cleanly above gradient masks */
-        .card-calendar > * {
+        /* Ensure all interactive card content sits cleanly above gradient masks */
+        .card-calendar > *,
+        .stat-card > *,
+        #sec-dashboard .card-minimal > * {
             position: relative;
             z-index: 2;
+        }
+
+        /* Tables inside overview cards: remove bottom border on last row so it bleeds seamlessly */
+        #sec-dashboard .card-minimal .table tr:last-child td,
+        #sec-dashboard .card-minimal .table tr:last-child th {
+            border-bottom: none !important;
         }
 
         /* Soft gradient divider for calendar footer so it dissolves naturally */
@@ -1214,19 +1242,23 @@ $js_muni_data     = json_encode(array_values($municipality_tally));
         }
 
         /* DARK MODE: Seamless Fade to Dark Canvas (#07110c) */
-        [data-bs-theme="dark"] .card-calendar {
+        [data-bs-theme="dark"] .card-calendar,
+        [data-bs-theme="dark"] .stat-card,
+        [data-bs-theme="dark"] #sec-dashboard .card-minimal {
             background: linear-gradient(180deg, 
                 #11231a 0%, 
                 #0e1e16 30%, 
                 rgba(13, 26, 19, 0.82) 60%, 
                 rgba(7, 17, 12, 0.92) 84%, 
-                #07110c 100%);
-            border: 1px solid rgba(27, 47, 36, 0.85);
-            border-bottom: 1px solid transparent;
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+                #07110c 100%) !important;
+            border: 1px solid rgba(27, 47, 36, 0.85) !important;
+            border-bottom: 1px solid transparent !important;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
         }
 
-        [data-bs-theme="dark"] .card-calendar::before {
+        [data-bs-theme="dark"] .card-calendar::before,
+        [data-bs-theme="dark"] .stat-card::before,
+        [data-bs-theme="dark"] #sec-dashboard .card-minimal::before {
             background: linear-gradient(180deg, 
                 rgba(35, 62, 48, 0.95) 0%, 
                 rgba(27, 47, 36, 0.6) 45%, 
@@ -1240,6 +1272,28 @@ $js_muni_data     = json_encode(array_values($municipality_tally));
                 rgba(27, 47, 36, 0.75) 25%, 
                 rgba(27, 47, 36, 0.75) 75%, 
                 transparent 100%);
+        }
+
+        /* Subtle bottom border dissolve for greetingsCard in dark mode */
+        [data-bs-theme="dark"] #greetingsCard {
+            border-bottom: 1px solid transparent !important;
+        }
+        [data-bs-theme="dark"] #greetingsCard::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(180deg, 
+                rgba(52, 211, 153, 0.35) 0%, 
+                rgba(52, 211, 153, 0.15) 45%, 
+                rgba(52, 211, 153, 0.05) 80%, 
+                transparent 100%);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+            z-index: 1;
         }
 
         .calendar-month-title {
@@ -1717,8 +1771,15 @@ $js_muni_data     = json_encode(array_values($municipality_tally));
         }
 
         .stat-card.ov-card:hover,
-        .card-minimal.ov-card:hover {
-            box-shadow: var(--shadow-hover);
+        .card-minimal.ov-card:hover,
+        .card-calendar.ov-card:hover {
+            box-shadow: 0 10px 24px -6px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
+        }
+
+        [data-bs-theme="dark"] .stat-card.ov-card:hover,
+        [data-bs-theme="dark"] .card-minimal.ov-card:hover,
+        [data-bs-theme="dark"] .card-calendar.ov-card:hover {
+            box-shadow: 0 10px 24px -6px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
         }
 
         /* Inner element choreography */
