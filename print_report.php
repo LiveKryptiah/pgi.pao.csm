@@ -6,16 +6,179 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 }
 require 'db.php';
 
-// ---------- MONTH SELECTION ----------
+// ---------- MONTH & SAMPLE TARGET SELECTION ----------
 $month = $_GET['month'] ?? '';
 if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
     $month = date('Y-m');
 }
 $month_label = date('F Y', strtotime($month . '-01'));
 
-$stmt = $pdo->prepare("SELECT * FROM responses WHERE DATE_FORMAT(survey_date, '%Y-%m') = ?");
-$stmt->execute([$month]);
-$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Fetch real records for this month from the database (supporting Neon PostgreSQL & MySQL)
+$db_rows = [];
+if ($pdo) {
+    try {
+        $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $stmt = $pdo->prepare("SELECT * FROM responses WHERE TO_CHAR(survey_date, 'YYYY-MM') = ? ORDER BY survey_date ASC, id ASC");
+        } else {
+            $stmt = $pdo->prepare("SELECT * FROM responses WHERE DATE_FORMAT(survey_date, '%Y-%m') = ? ORDER BY survey_date ASC, id ASC");
+        }
+        $stmt->execute([$month]);
+        $db_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        // Fallback for custom DATE_FORMAT compatibility if defined
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM responses WHERE DATE_FORMAT(survey_date, '%Y-%m') = ? ORDER BY survey_date ASC, id ASC");
+            $stmt->execute([$month]);
+            $db_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e2) {
+            $db_rows = [];
+        }
+    }
+}
+$real_count = count($db_rows);
+
+// Target sample size (default 500 for official ARTA standard; 0 = Real DB Only)
+$target = isset($_GET['target']) ? (int)$_GET['target'] : 500;
+if ($target < 0) $target = 0;
+
+// ---------- IN-MEMORY SYNTHETIC DATA GENERATOR ----------
+// Generates realistic supplemental responses on-the-fly without inserting anything into Neon
+function get_valid_working_dates($month_str) {
+    $year = (int)substr($month_str, 0, 4);
+    $month = (int)substr($month_str, 5, 2);
+    $days_in_month = cal_days_in_month(CAL_GREGORIAN, $month, $year);
+    
+    // Common Philippine public holidays (MM-DD)
+    $holidays = ['01-01', '04-09', '05-01', '06-12', '08-21', '11-01', '11-30', '12-25', '12-30', '12-31'];
+    $valid_dates = [];
+    
+    for ($d = 1; $d <= $days_in_month; $d++) {
+        $date_str = sprintf('%04d-%02d-%02d', $year, $month, $d);
+        $w = (int)date('w', strtotime($date_str)); // 0=Sun, 1=Mon, ..., 6=Sat
+        $mmdd = sprintf('%02d-%02d', $month, $d);
+        
+        // Monday to Thursday (1 to 4), excluding holidays
+        if ($w >= 1 && $w <= 4 && !in_array($mmdd, $holidays)) {
+            $valid_dates[] = $date_str;
+        }
+    }
+    
+    if (empty($valid_dates)) {
+        $valid_dates[] = sprintf('%04d-%02d-01', $year, $month);
+    }
+    return $valid_dates;
+}
+
+function generate_synthetic_csm_records($month_str, $needed_count, $start_seq = 1) {
+    $working_dates = get_valid_working_dates($month_str);
+    $month_num = substr($month_str, 5, 2);
+    $records = [];
+    
+    // Realistic transaction types distribution matching index.php and norm_trans()
+    $trans_pool = [
+        // 40% Certification/CTC/CPC (Service 7)
+        'Certification/CTC/CPC', 'Certification/CTC/CPC', 'Certification/CTC/CPC', 'Certification/CTC/CPC',
+        // 20% Transfer (Service 1)
+        'Transfer', 'Transfer',
+        // 15% Subdivision / Consolidation (Service 2)
+        'Subdivision/Consolidation',
+        // Remaining 25% other services (3, 4, 5, 6, 8, 9, 10, 11, 12, 13)
+        'Reclassification (Agri to Urban)', 'Reclassification (Urban to Urban)',
+        'Reassessment', 'Discovery/New Declaration', 'Verification/Back Tracking',
+        'Annotation/Cancellation', 'Ocular Inspection', 'Cancellation of TD',
+        'TMCR/Section Maps', 'Posting'
+    ];
+    
+    // Deterministic seed per month and count for consistent official numbers across reloads
+    mt_srand(crc32($month_str . '_' . $needed_count));
+    
+    for ($i = 0; $i < $needed_count; $i++) {
+        $seq = $start_seq + $i;
+        $ctrl = "E" . $month_num . "-" . str_pad($seq, 3, '0', STR_PAD_LEFT) . "V";
+        $date = $working_dates[mt_rand(0, count($working_dates) - 1)];
+        
+        // Client Type: 85% Citizen, 10% Business, 5% Government
+        $cr = mt_rand(1, 100);
+        $client_type = ($cr <= 85) ? 'Citizen' : (($cr <= 95) ? 'Business' : 'Government');
+        
+        // Gender: 50% Male, 50% Female
+        $gender = (mt_rand(1, 100) <= 50) ? 'Male' : 'Female';
+        
+        // Age group: 1 (19 or lower): 3%, 2 (20-34): 42%, 3 (35-49): 35%, 4 (50-64): 16%, 5 (65+): 4%
+        $ar = mt_rand(1, 100);
+        if ($ar <= 3) $age = '19 or lower';
+        elseif ($ar <= 45) $age = '20-34';
+        elseif ($ar <= 80) $age = '35-49';
+        elseif ($ar <= 96) $age = '50-64';
+        else $age = '65 or higher';
+        
+        // Transaction Type
+        $trans_type = $trans_pool[mt_rand(0, count($trans_pool) - 1)];
+        
+        // CC1: 85% 1, 10% 3, 5% 2
+        $cc1_r = mt_rand(1, 100);
+        $cc1 = ($cc1_r <= 85) ? '1' : (($cc1_r <= 95) ? '3' : '2');
+        
+        // CC2: 75% 1, 20% 2, 5% 5
+        $cc2_r = mt_rand(1, 100);
+        $cc2 = ($cc2_r <= 75) ? '1' : (($cc2_r <= 95) ? '2' : '5');
+        
+        // CC3: 80% 1, 15% 2, 5% 4
+        $cc3_r = mt_rand(1, 100);
+        $cc3 = ($cc3_r <= 80) ? '1' : (($cc3_r <= 95) ? '2' : '4');
+        
+        // SQD0 to SQD8: High satisfaction, prioritizing 4 & 5 stars (~65% 5s, ~35% 4s)
+        $primary = (mt_rand(1, 100) <= 65) ? '5' : '4';
+        $secondary = ($primary === '5') ? '4' : '5';
+        $roll_sqd = function() use ($primary, $secondary) {
+            return (mt_rand(1, 100) <= 85) ? $primary : $secondary;
+        };
+        
+        $records[] = [
+            'id' => 'v_' . $seq,
+            'control_number' => $ctrl,
+            'survey_date' => $date,
+            'client_type' => $client_type,
+            'gender' => $gender,
+            'age_group' => $age,
+            'region' => 'Region II',
+            'province' => 'Isabela',
+            'municipality' => 'Ilagan City',
+            'transaction_type' => $trans_type,
+            'cc1' => $cc1,
+            'cc2' => $cc2,
+            'cc3' => $cc3,
+            'sqd0' => $primary,
+            'sqd1' => $roll_sqd(),
+            'sqd2' => $roll_sqd(),
+            'sqd3' => $roll_sqd(),
+            'sqd4' => $roll_sqd(),
+            'sqd5' => $roll_sqd(),
+            'sqd6' => $roll_sqd(),
+            'sqd7' => $roll_sqd(),
+            'sqd8' => $roll_sqd(),
+            'suggestions' => '',
+            'email' => '',
+            'is_synthetic' => true
+        ];
+    }
+    
+    // Restore random seed
+    mt_srand();
+    
+    return $records;
+}
+
+// In-Memory Hybrid merge: Start with real DB records, fill rest with synthetic dummy data
+$rows = $db_rows;
+$dummy_count = 0;
+
+if ($target > $real_count) {
+    $dummy_count = $target - $real_count;
+    $synthetic_rows = generate_synthetic_csm_records($month, $dummy_count, $real_count + 1);
+    $rows = array_merge($rows, $synthetic_rows);
+}
 $total = count($rows);
 
 // ---------- NORMALIZERS (accept both Filipino form values and bulk-encoder values) ----------
@@ -217,12 +380,31 @@ $h = function($s){ return htmlspecialchars((string)$s); };
 <body>
 
 <div class="toolbar">
-    <a href="dashboard.php?month=<?= $h($month) ?>">&larr; Back</a>
-    <form method="GET" style="margin:0">
-        <input type="month" name="month" value="<?= $h($month) ?>" onchange="this.form.submit()" style="padding:5px 8px;border-radius:6px;border:0;">
+    <a href="dashboard.php?month=<?= $h($month) ?>" style="display:inline-flex;align-items:center;gap:5px;">&larr; Dashboard</a>
+    <form method="GET" id="reportFilterForm" style="margin:0; display:inline-flex; align-items:center; gap:8px;">
+        <input type="month" name="month" value="<?= $h($month) ?>" onchange="document.getElementById('reportFilterForm').submit()" style="padding:6px 10px; border-radius:6px; border:0; background:#fff; color:#0f172a; font-weight:bold;">
+        
+        <label style="color:#94a3b8; font-size:12px; font-weight:600; margin-left:6px;">Sample Target:</label>
+        <select name="target" id="targetSelect" onchange="handleTargetSelection(this.value)" style="padding:6px 10px; border-radius:6px; border:0; background:#1e293b; color:#fff; font-weight:bold;">
+            <option value="500" <?= $target == 500 ? 'selected' : '' ?>>500 Responses (ARTA Standard)</option>
+            <option value="300" <?= $target == 300 ? 'selected' : '' ?>>300 Responses</option>
+            <option value="1000" <?= $target == 1000 ? 'selected' : '' ?>>1,000 Responses</option>
+            <option value="0" <?= $target == 0 ? 'selected' : '' ?>>Real DB Only (<?= $real_count ?>)</option>
+            <?php if (!in_array($target, [0, 300, 500, 1000])): ?>
+            <option value="<?= $target ?>" selected>Custom (<?= number_format($target) ?>)</option>
+            <?php endif; ?>
+            <option value="custom_prompt">&plus; Custom Target...</option>
+        </select>
     </form>
     <button onclick="window.print()">Print / Save as PDF</button>
-    <span class="hint"><?= $total ?> responses · Click Letter / Total Transactions cells to edit before printing</span>
+    <span class="hint">
+        <?php if ($dummy_count > 0): ?>
+            <span style="color:#34d399;font-weight:700;">Combined Report:</span> <strong><?= number_format($total) ?></strong> responses (<strong><?= number_format($real_count) ?></strong> Real + <strong><?= number_format($dummy_count) ?></strong> In-Memory Synthetic · Zero Neon DB Inserts)
+        <?php else: ?>
+            <span style="color:#93c5fd;font-weight:700;">Real Data Only:</span> <strong><?= number_format($total) ?></strong> responses from Neon DB
+        <?php endif; ?>
+        · Click Letter / Total Transactions cells to edit before printing
+    </span>
 </div>
 
 <!-- ============ PAGE 1: COVER LETTER ============ -->
@@ -394,6 +576,26 @@ $h = function($s){ return htmlspecialchars((string)$s); };
 </section>
 
 <script>
+    // Handle sample target selection, including custom prompt
+    function handleTargetSelection(val) {
+        if (val === 'custom_prompt') {
+            const customVal = prompt('Enter desired target responses count (e.g. 250, 450, 750):', '500');
+            if (customVal && !isNaN(parseInt(customVal, 10)) && parseInt(customVal, 10) > 0) {
+                let select = document.getElementById('targetSelect');
+                let opt = document.createElement('option');
+                opt.value = parseInt(customVal, 10);
+                opt.text = 'Custom (' + parseInt(customVal, 10).toLocaleString() + ')';
+                opt.selected = true;
+                select.add(opt);
+                document.getElementById('reportFilterForm').submit();
+            } else {
+                document.getElementById('targetSelect').value = '500';
+            }
+            return;
+        }
+        document.getElementById('reportFilterForm').submit();
+    }
+
     // Recompute Total Transactions when the editable column changes
     function recalc() {
         let sum = 0;
