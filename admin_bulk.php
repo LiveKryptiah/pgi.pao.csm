@@ -723,12 +723,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['bulk_json']) || iss
 }
 }
 
-// 4. RETRIEVE MONTH TALLIES (Executed after all POST operations so tallies immediately reflect new records)
+// Normalizer for transaction types to service indices 1-13
+function norm_trans_php($v) {
+    $v = strtolower((string)$v);
+    if (strpos($v, 'agri') !== false) return 3;
+    if (strpos($v, 'urban to urban') !== false || strpos($v, 'reclassification') !== false) return 4;
+    if (strpos($v, 'subdivision') !== false) return 2;
+    if (strpos($v, 'transfer') !== false) return 1;
+    if (strpos($v, 'reassessment') !== false) return 5;
+    if (strpos($v, 'discovery') !== false) return 6;
+    if (strpos($v, 'certification') !== false) return 7;
+    if (strpos($v, 'verification') !== false) return 8;
+    if (strpos($v, 'annotation') !== false) return 9;
+    if (strpos($v, 'ocular') !== false) return 10;
+    if (strpos($v, 'cancellation of td') !== false) return 11;
+    if (strpos($v, 'tmcr') !== false || strpos($v, 'section map') !== false) return 12;
+    if (strpos($v, 'posting') !== false) return 13;
+    return 7;
+}
+
+// 4. RETRIEVE MONTH TALLIES & ACTIVE SERVICE BREAKDOWN (Neon PostgreSQL & MySQL compatible)
 $month_tallies = [];
-try {
-    $mt_stmt = $pdo->query("SELECT DATE_FORMAT(survey_date, '%Y-%m') as ym, DATE_FORMAT(survey_date, '%M %Y') as m_label, COUNT(*) as total_cnt, SUM(CASE WHEN control_number LIKE '%B' OR control_number LIKE 'BLK-%' THEN 1 ELSE 0 END) as bulk_cnt FROM responses WHERE survey_date IS NOT NULL AND survey_date != '0000-00-00' GROUP BY ym, m_label ORDER BY ym DESC");
-    $month_tallies = $mt_stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (Exception $e) {}
+$active_rep_month = $_GET['report_month'] ?? '';
+$db_service_counts = array_fill(1, 13, 0);
+$db_active_total = 0;
+$db_active_real = 0;
+$db_active_bulk = 0;
+
+if ($pdo) {
+    try {
+        $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $mt_stmt = $pdo->query("SELECT TO_CHAR(survey_date, 'YYYY-MM') as ym, TO_CHAR(survey_date, 'FMMonth YYYY') as m_label, COUNT(*) as total_cnt, SUM(CASE WHEN control_number LIKE '%B' OR control_number LIKE 'BLK-%' THEN 1 ELSE 0 END) as bulk_cnt FROM responses WHERE survey_date IS NOT NULL GROUP BY ym, m_label ORDER BY ym DESC");
+        } else {
+            $mt_stmt = $pdo->query("SELECT DATE_FORMAT(survey_date, '%Y-%m') as ym, DATE_FORMAT(survey_date, '%M %Y') as m_label, COUNT(*) as total_cnt, SUM(CASE WHEN control_number LIKE '%B' OR control_number LIKE 'BLK-%' THEN 1 ELSE 0 END) as bulk_cnt FROM responses WHERE survey_date IS NOT NULL AND survey_date != '0000-00-00' GROUP BY ym, m_label ORDER BY ym DESC");
+        }
+        $month_tallies = $mt_stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        $month_tallies = [];
+    }
+
+    if (!preg_match('/^\d{4}-\d{2}$/', $active_rep_month)) {
+        $active_rep_month = !empty($month_tallies[0]['ym']) ? $month_tallies[0]['ym'] : date('Y-m');
+    }
+
+    // Query active month responses breakdown across the 13 services
+    try {
+        $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $s_stmt = $pdo->prepare("SELECT transaction_type, control_number FROM responses WHERE TO_CHAR(survey_date, 'YYYY-MM') = ?");
+        } else {
+            $s_stmt = $pdo->prepare("SELECT transaction_type, control_number FROM responses WHERE DATE_FORMAT(survey_date, '%Y-%m') = ?");
+        }
+        $s_stmt->execute([$active_rep_month]);
+        $active_rows = $s_stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($active_rows as $arow) {
+            $db_active_total++;
+            $ctrl = $arow['control_number'] ?? '';
+            if (substr($ctrl, -1) === 'B' || strpos($ctrl, 'BLK-') === 0) {
+                $db_active_bulk++;
+            } else {
+                $db_active_real++;
+            }
+            $t = norm_trans_php($arow['transaction_type'] ?? '');
+            if ($t >= 1 && $t <= 13) {
+                $db_service_counts[$t]++;
+            }
+        }
+    } catch (Throwable $e) {}
+}
+
+if (!preg_match('/^\d{4}-\d{2}$/', $active_rep_month)) {
+    $active_rep_month = date('Y-m');
+}
+$active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1195,6 +1263,41 @@ try {
             background-color: #334155 !important;
         }
 
+        /* OVERALL RESPONSES & TOTAL TRANSACTION TABLE STYLING */
+        #overallResponsesSvcTable {
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        #overallResponsesSvcTable tbody tr {
+            transition: background-color 0.15s ease;
+        }
+        #overallResponsesSvcTable tbody tr:hover {
+            background-color: rgba(5, 150, 105, 0.04);
+        }
+        .overall-tt-input {
+            border-radius: 8px;
+            border: 1px solid var(--border-subtle);
+            font-weight: 700;
+            transition: all 0.15s ease;
+        }
+        .overall-tt-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
+            background-color: #f0fdf4;
+        }
+        [data-bs-theme="dark"] #overallResponsesSvcTable tbody tr:hover {
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+        [data-bs-theme="dark"] .overall-tt-input {
+            background-color: #0f172a !important;
+            border-color: #334155 !important;
+            color: #f1f5f9 !important;
+        }
+        [data-bs-theme="dark"] .overall-tt-input:focus {
+            border-color: #10b981 !important;
+            background-color: #1e293b !important;
+        }
+
         /* CUSTOM SCROLLBAR */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -1586,167 +1689,289 @@ try {
             </div>
         </div>
 
-        <!-- DATABASE RECORDS SUMMARY BY MONTH CARD -->
-        <div class="card-minimal">
-            <div class="card-header-clean flex-wrap gap-2">
+        <!-- OVERALL RESPONSES & TOTAL TRANSACTION CARD -->
+        <div class="card-minimal" id="overallResponsesCard">
+            <div class="card-header-clean flex-wrap gap-2 pb-2 border-bottom">
                 <div class="d-flex align-items-center gap-2.5">
                     <div class="text-primary fs-4 d-flex align-items-center">
-                        <i class="ph-bold ph-database"></i>
+                        <i class="ph-bold ph-chart-bar"></i>
                     </div>
                     <div>
-                        <h6 class="card-title-clean">Database Records by Month</h6>
-                        <span class="text-muted" style="font-size: 0.76rem;">Current distribution of bulk-generated records versus real citizen responses.</span>
+                        <h6 class="card-title-clean">Overall Responses &amp; Total Transaction</h6>
+                        <span class="text-muted" style="font-size: 0.76rem;">Official ARTA CSM summary breakdown across the 13 PAO Isabela external services (Page 4 Standard).</span>
                     </div>
                 </div>
-                
-                <?php 
-                    $total_all_records = 0;
-                    $total_bulk_records = 0;
-                    foreach ($month_tallies as $mt) {
-                        $total_all_records += (int)$mt['total_cnt'];
-                        $total_bulk_records += (int)$mt['bulk_cnt'];
-                    }
-                ?>
-                <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <span class="pill-badge pill-slate">Total: <?= number_format($total_all_records) ?> Records</span>
-                    <span class="pill-badge pill-blue">Bulk: <?= number_format($total_bulk_records) ?></span>
-                    <span class="pill-badge pill-emerald">Real: <?= number_format(max(0, $total_all_records - $total_bulk_records)) ?></span>
+
+                <div class="d-flex align-items-center gap-2 ms-auto flex-wrap">
+                    <!-- Active Month Selector Dropdown -->
+                    <form method="GET" action="admin_bulk.php#overallResponsesCard" class="d-inline-flex align-items-center gap-1.5 m-0">
+                        <label class="text-muted small fw-bold mb-0">Month:</label>
+                        <select name="report_month" class="form-select form-select-sm fw-bold border" onchange="this.form.submit()" style="min-width: 175px;">
+                            <?php if (!empty($month_tallies)): ?>
+                                <?php foreach ($month_tallies as $mt): ?>
+                                    <option value="<?= htmlspecialchars($mt['ym']) ?>" <?= ($mt['ym'] === $active_rep_month) ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($mt['m_label']) ?> (<?= number_format($mt['total_cnt']) ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <option value="<?= htmlspecialchars($active_rep_month) ?>" selected><?= htmlspecialchars($active_month_label) ?></option>
+                            <?php endif; ?>
+                        </select>
+                    </form>
+
+                    <!-- Quick Action: Print Official CSM Report -->
+                    <a href="print_report.php?month=<?= urlencode($active_rep_month) ?>" target="_blank" class="btn btn-sm btn-primary fw-semibold rounded-3 py-1.5 px-3 d-inline-flex align-items-center gap-1.5 shadow-sm" title="Open official 4-page ARTA CSM Report in new window">
+                        <i class="ph-bold ph-printer"></i> Print Report
+                    </a>
+
+                    <!-- Quick Action: Copy 25-Col Data Table -->
+                    <button type="button" class="btn btn-sm btn-outline-success fw-semibold rounded-3 py-1.5 px-3 d-inline-flex align-items-center gap-1.5" onclick="copyMonthData('<?= htmlspecialchars($active_rep_month) ?>', 'data_only', this)" title="Copy 25-column CSM data table for Excel">
+                        <i class="ph-bold ph-copy"></i> Copy Data Table
+                    </button>
+
+                    <!-- Dropdown for more options (Download CSV, Preview, Wipe Month) -->
+                    <div class="dropdown d-inline-block">
+                        <button type="button" class="btn btn-sm btn-light border rounded-3 py-1.5 px-2 text-muted" data-bs-toggle="dropdown" aria-expanded="false" title="More options">
+                            <i class="ph-bold ph-dots-three-vertical fs-6"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1.5 rounded-3" style="min-width: 240px; font-size: 0.85rem;">
+                            <li class="dropdown-header text-uppercase fw-bold text-muted" style="font-size: 0.68rem; letter-spacing: 0.05em;">
+                                <?= htmlspecialchars($active_month_label) ?> Actions
+                            </li>
+                            <li>
+                                <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="copyMonthData('<?= htmlspecialchars($active_rep_month) ?>', 'full', this)">
+                                    <i class="ph-bold ph-microsoft-excel-logo text-success fs-5"></i>
+                                    <div>
+                                        <div class="fw-semibold text-dark">Copy Full Template</div>
+                                        <div class="text-muted small" style="font-size: 0.72rem;">Summary + Data (Excel)</div>
+                                    </div>
+                                </button>
+                            </li>
+                            <li>
+                                <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="copyMonthData('<?= htmlspecialchars($active_rep_month) ?>', 'summary_only', this)">
+                                    <i class="ph-bold ph-chart-bar text-warning fs-5"></i>
+                                    <div>
+                                        <div class="fw-semibold text-dark">Copy Summary Tallies Only</div>
+                                        <div class="text-muted small" style="font-size: 0.72rem;">ARTA Category Breakdown</div>
+                                    </div>
+                                </button>
+                            </li>
+                            <li>
+                                <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="admin_bulk.php?action=download_csm_csv&month=<?= urlencode($active_rep_month) ?>">
+                                    <i class="ph-bold ph-file-csv text-info fs-5"></i>
+                                    <div>
+                                        <div class="fw-semibold text-dark">Download as CSV</div>
+                                        <div class="text-muted small" style="font-size: 0.72rem;">Direct spreadsheet file</div>
+                                    </div>
+                                </a>
+                            </li>
+                            <li>
+                                <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="openPreviewExportModal('<?= htmlspecialchars($active_rep_month) ?>', '<?= htmlspecialchars($active_month_label) ?>', <?= $db_active_total ?>)">
+                                    <i class="ph-bold ph-eye text-secondary fs-5"></i>
+                                    <div>
+                                        <div class="fw-semibold text-dark">Preview &amp; Customize</div>
+                                        <div class="text-muted small" style="font-size: 0.72rem;">Inspect columns before copying</div>
+                                    </div>
+                                </button>
+                            </li>
+                            <li><hr class="dropdown-divider my-1"></li>
+                            <li>
+                                <button class="dropdown-item d-flex align-items-center gap-2 py-2 text-danger" type="button" onclick="openWipeForMonth('<?= htmlspecialchars($active_rep_month) ?>')">
+                                    <i class="ph-bold ph-trash fs-5"></i>
+                                    <div>
+                                        <div class="fw-semibold">Wipe Data for <?= htmlspecialchars($active_month_label) ?></div>
+                                        <div class="text-muted small" style="font-size: 0.72rem;">Bulk only or all records</div>
+                                    </div>
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
 
-            <?php if (!empty($month_tallies)): ?>
-                <div class="summary-table-container">
-                    <table class="summary-table">
-                        <thead>
+            <!-- Month Summary Badges Bar -->
+            <div class="d-flex align-items-center justify-content-between pt-2 pb-3 flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="pill-badge pill-slate">Month: <strong><?= htmlspecialchars($active_month_label) ?></strong></span>
+                    <span class="pill-badge pill-blue">Total Responses: <strong id="activeMonthTotalRespBadge"><?= number_format($db_active_total) ?></strong></span>
+                    <span class="pill-badge pill-emerald">Real Citizen: <strong><?= number_format($db_active_real) ?></strong></span>
+                    <?php if ($db_active_bulk > 0): ?>
+                        <span class="pill-badge pill-amber">Bulk Staged: <strong><?= number_format($db_active_bulk) ?></strong></span>
+                    <?php endif; ?>
+                </div>
+                <div class="text-muted small d-inline-flex align-items-center gap-1.5">
+                    <i class="ph-bold ph-pencil-simple text-primary"></i>
+                    <span>"Total Transactions" values can be typed directly to match office registries</span>
+                </div>
+            </div>
+
+            <!-- Official 13-Service Breakdown Table -->
+            <div class="summary-table-container border rounded-3 overflow-hidden shadow-xs mb-3">
+                <table class="table table-hover align-middle mb-0" id="overallResponsesSvcTable">
+                    <thead class="table-light border-bottom">
+                        <tr>
+                            <th style="width: 50px;" class="text-center">#</th>
+                            <th>External Services (PAO Isabela)</th>
+                            <th style="width: 170px;" class="text-center">Survey Responses</th>
+                            <th style="width: 180px;" class="text-center">Total Transactions</th>
+                            <th style="width: 110px;" class="text-center">% Share</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php 
+                            $sum_resp = array_sum($db_service_counts);
+                            foreach ($servicesMeta as $idx => $s): 
+                                $rCount = $db_service_counts[$idx] ?? 0;
+                                $sharePct = $sum_resp > 0 ? number_format(($rCount / $sum_resp) * 100, 1) : '0.0';
+                        ?>
                             <tr>
-                                <th>Target Month</th>
-                                <th class="text-center">Bulk Generated</th>
-                                <th class="text-center">Real Citizen</th>
-                                <th class="text-center">Total Records</th>
-                                <th class="text-end">Actions & Export</th>
+                                <td class="text-center">
+                                    <span class="badge bg-light text-primary border fw-bold px-2 py-1 rounded-2">
+                                        #<?= $idx ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="fw-bold text-dark" style="font-size: 0.88rem;">
+                                        <?= htmlspecialchars($s['title']) ?>
+                                    </div>
+                                    <div class="text-muted" style="font-size: 0.74rem;">
+                                        <?= htmlspecialchars($s['desc']) ?>
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <span class="fw-bold text-dark fs-6 card-resp-val" id="cardResp_<?= $idx ?>">
+                                        <?= number_format($rCount) ?>
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <div class="d-inline-flex align-items-center justify-content-center">
+                                        <input type="number" min="0" max="99999" 
+                                               class="form-control form-control-sm text-center fw-bold overall-tt-input" 
+                                               id="cardTt_<?= $idx ?>" 
+                                               data-idx="<?= $idx ?>" 
+                                               value="<?= $rCount ?>" 
+                                               style="width: 120px; font-size: 0.88rem;" 
+                                               oninput="recalcCardOverallTotal()">
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-light text-secondary border small card-share-val" id="cardShare_<?= $idx ?>">
+                                        <?= $sharePct ?>%
+                                    </span>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($month_tallies as $mt): 
-                                $bulkCount = (int)$mt['bulk_cnt'];
-                                $totalCount = (int)$mt['total_cnt'];
-                                $realCount = max(0, $totalCount - $bulkCount);
-                            ?>
-                                <tr>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <i class="ph-bold ph-calendar text-muted fs-6"></i>
-                                            <span class="fw-bold text-dark"><?= htmlspecialchars($mt['m_label']) ?></span>
-                                            <span class="text-muted small">(<?= htmlspecialchars($mt['ym']) ?>)</span>
-                                        </div>
-                                    </td>
-                                    <td class="text-center">
-                                        <span class="pill-badge pill-blue fw-bold">
-                                            <?= number_format($bulkCount) ?> records
-                                        </span>
-                                    </td>
-                                    <td class="text-center">
-                                        <span class="pill-badge pill-emerald fw-bold">
-                                            <?= number_format($realCount) ?> records
-                                        </span>
-                                    </td>
-                                    <td class="text-center">
-                                        <span class="pill-badge pill-slate fw-bold">
-                                            <?= number_format($totalCount) ?> total
-                                        </span>
-                                    </td>
-                                    <td class="text-end">
-                                        <div class="d-inline-flex align-items-center gap-1.5 flex-wrap justify-content-end">
-                                            <!-- Main Quick Copy Button -->
-                                            <button type="button" 
-                                                    class="btn btn-sm btn-outline-success rounded-3 py-1 px-2.5 d-inline-flex align-items-center gap-1.5 fw-semibold" 
-                                                    onclick="copyMonthData('<?= htmlspecialchars($mt['ym']) ?>', 'data_only', this)" 
-                                                    title="Copy 25-column CSM data table for <?= htmlspecialchars($mt['m_label']) ?> (Ctrl+V into Excel)">
-                                                <i class="ph-bold ph-copy fs-6"></i>
-                                                <span>Copy Data</span>
-                                            </button>
+                        <?php endforeach; ?>
+                    </tbody>
+                    <tfoot class="border-top">
+                        <tr class="table-light fw-bold" style="border-top: 2px solid var(--border-subtle);">
+                            <td colspan="2" class="ps-3 text-uppercase tracking-wider small fw-bold">
+                                EXTERNAL SERVICE TOTAL
+                            </td>
+                            <td class="text-center fs-6 text-primary fw-bold" id="cardExternalTotalResp">
+                                <?= number_format($sum_resp) ?>
+                            </td>
+                            <td class="text-center fs-6 text-success fw-bold" id="cardExternalTotalTt">
+                                <?= number_format($sum_resp) ?>
+                            </td>
+                            <td class="text-center text-muted small">
+                                100.0%
+                            </td>
+                        </tr>
+                        <tr class="fw-bold bg-dark text-white">
+                            <td colspan="2" class="ps-3 text-uppercase tracking-wider small fw-bold text-white">
+                                OVERALL TOTAL
+                            </td>
+                            <td class="text-center fs-6 text-white fw-bold" id="cardOverallFinalResp">
+                                <?= number_format($sum_resp) ?>
+                            </td>
+                            <td class="text-center fs-6 text-warning fw-bold" id="cardOverallFinalTt">
+                                <?= number_format($sum_resp) ?>
+                            </td>
+                            <td class="text-center text-white small">
+                                100.0%
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
 
-                                            <!-- Dropdown for more copy/export options -->
-                                            <div class="dropdown d-inline-block">
-                                                <button type="button" 
-                                                        class="btn btn-sm btn-light border rounded-3 py-1 px-2 text-muted" 
-                                                        data-bs-toggle="dropdown" 
-                                                        aria-expanded="false" 
-                                                        title="More export options for <?= htmlspecialchars($mt['m_label']) ?>">
-                                                    <i class="ph-bold ph-dots-three-vertical fs-6"></i>
-                                                </button>
-                                                <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1.5 rounded-3" style="min-width: 240px; font-size: 0.85rem;">
-                                                    <li class="dropdown-header text-uppercase fw-bold text-muted" style="font-size: 0.68rem; letter-spacing: 0.05em;">
-                                                        <?= htmlspecialchars($mt['m_label']) ?> Export
-                                                    </li>
-                                                    <li>
-                                                        <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="copyMonthData('<?= htmlspecialchars($mt['ym']) ?>', 'data_only', this)">
-                                                            <i class="ph-bold ph-table text-primary fs-5"></i>
-                                                            <div>
-                                                                <div class="fw-semibold text-dark">Copy Data Table Only</div>
-                                                                <div class="text-muted small" style="font-size: 0.72rem;">25 columns (CSM Control No. to Comments)</div>
-                                                            </div>
-                                                        </button>
-                                                    </li>
-                                                    <li>
-                                                        <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="copyMonthData('<?= htmlspecialchars($mt['ym']) ?>', 'full', this)">
-                                                            <i class="ph-bold ph-microsoft-excel-logo text-success fs-5"></i>
-                                                            <div>
-                                                                <div class="fw-semibold text-dark">Copy Full Template (Excel)</div>
-                                                                <div class="text-muted small" style="font-size: 0.72rem;">Summary on Left + Data on Right</div>
-                                                            </div>
-                                                        </button>
-                                                    </li>
-                                                    <li>
-                                                        <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="copyMonthData('<?= htmlspecialchars($mt['ym']) ?>', 'summary_only', this)">
-                                                            <i class="ph-bold ph-chart-bar text-warning fs-5"></i>
-                                                            <div>
-                                                                <div class="fw-semibold text-dark">Copy Summary Tallies Only</div>
-                                                                <div class="text-muted small" style="font-size: 0.72rem;">ARTA Category Breakdown</div>
-                                                            </div>
-                                                        </button>
-                                                    </li>
-                                                    <li><hr class="dropdown-divider my-1"></li>
-                                                    <li>
-                                                        <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="admin_bulk.php?action=download_csm_csv&month=<?= urlencode($mt['ym']) ?>">
-                                                            <i class="ph-bold ph-file-csv text-info fs-5"></i>
-                                                            <div>
-                                                                <div class="fw-semibold text-dark">Download as CSV</div>
-                                                                <div class="text-muted small" style="font-size: 0.72rem;">Open directly in Excel/Sheets</div>
-                                                            </div>
-                                                        </a>
-                                                    </li>
-                                                    <li>
-                                                        <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="openPreviewExportModal('<?= htmlspecialchars($mt['ym']) ?>', '<?= htmlspecialchars($mt['m_label']) ?>', <?= $totalCount ?>)">
-                                                            <i class="ph-bold ph-eye text-secondary fs-5"></i>
-                                                            <div>
-                                                                <div class="fw-semibold text-dark">Preview & Customize</div>
-                                                                <div class="text-muted small" style="font-size: 0.72rem;">Inspect columns before copying</div>
-                                                            </div>
-                                                        </button>
-                                                    </li>
-                                                </ul>
-                                            </div>
+            <!-- Collapsible: View All Monthly Records Archive & History -->
+            <div class="pt-2 border-top">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <button class="btn btn-sm btn-outline-secondary rounded-3 py-1.5 px-3 fw-semibold d-inline-flex align-items-center gap-1.5" type="button" data-bs-toggle="collapse" data-bs-target="#monthArchiveCollapse" aria-expanded="false" aria-controls="monthArchiveCollapse">
+                        <i class="ph-bold ph-caret-down"></i>
+                        <span>View Monthly Records Archive (<?= count($month_tallies) ?> Months)</span>
+                    </button>
+                    <span class="text-muted small">Historical database counts &amp; bulk deletion management</span>
+                </div>
 
-                                            <button type="button" class="btn btn-sm btn-outline-danger rounded-3 py-1 px-2.5 d-inline-flex align-items-center gap-1.5 fw-semibold" onclick="openWipeForMonth('<?= htmlspecialchars($mt['ym']) ?>')" title="Wipe records for <?= htmlspecialchars($mt['m_label']) ?>">
-                                                <i class="ph-bold ph-calendar-x"></i> Wipe Month
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                <div class="collapse mt-3" id="monthArchiveCollapse">
+                    <?php if (!empty($month_tallies)): ?>
+                        <div class="summary-table-container border rounded-3 overflow-hidden">
+                            <table class="summary-table">
+                                <thead>
+                                    <tr>
+                                        <th>Target Month</th>
+                                        <th class="text-center">Bulk Generated</th>
+                                        <th class="text-center">Real Citizen</th>
+                                        <th class="text-center">Total Records</th>
+                                        <th class="text-end">Actions &amp; Export</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($month_tallies as $mt): 
+                                        $bulkCount = (int)$mt['bulk_cnt'];
+                                        $totalCount = (int)$mt['total_cnt'];
+                                        $realCount = max(0, $totalCount - $bulkCount);
+                                    ?>
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <i class="ph-bold ph-calendar text-muted fs-6"></i>
+                                                    <span class="fw-bold text-dark"><?= htmlspecialchars($mt['m_label']) ?></span>
+                                                    <span class="text-muted small">(<?= htmlspecialchars($mt['ym']) ?>)</span>
+                                                </div>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="pill-badge pill-blue fw-bold">
+                                                    <?= number_format($bulkCount) ?> records
+                                                </span>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="pill-badge pill-emerald fw-bold">
+                                                    <?= number_format($realCount) ?> records
+                                                </span>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="pill-badge pill-slate fw-bold">
+                                                    <?= number_format($totalCount) ?> total
+                                                </span>
+                                            </td>
+                                            <td class="text-end">
+                                                <div class="d-inline-flex align-items-center gap-1.5 flex-wrap justify-content-end">
+                                                    <a href="admin_bulk.php?report_month=<?= urlencode($mt['ym']) ?>#overallResponsesCard" class="btn btn-sm btn-outline-primary rounded-3 py-1 px-2.5 d-inline-flex align-items-center gap-1 fw-semibold" title="View <?= htmlspecialchars($mt['m_label']) ?> in Overall Responses table">
+                                                        <i class="ph-bold ph-arrow-up-right"></i> View
+                                                    </a>
+                                                    <button type="button" 
+                                                            class="btn btn-sm btn-outline-success rounded-3 py-1 px-2.5 d-inline-flex align-items-center gap-1.5 fw-semibold" 
+                                                            onclick="copyMonthData('<?= htmlspecialchars($mt['ym']) ?>', 'data_only', this)" 
+                                                            title="Copy 25-column CSM data table for <?= htmlspecialchars($mt['m_label']) ?>">
+                                                        <i class="ph-bold ph-copy fs-6"></i>
+                                                        <span>Copy</span>
+                                                    </button>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger rounded-3 py-1 px-2 d-inline-flex align-items-center gap-1 text-danger" onclick="openWipeForMonth('<?= htmlspecialchars($mt['ym']) ?>')" title="Wipe records for <?= htmlspecialchars($mt['m_label']) ?>">
+                                                        <i class="ph-bold ph-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
                 </div>
-            <?php else: ?>
-                <div class="text-center py-5">
-                    <div class="text-muted fs-1 mb-2">
-                        <i class="ph-bold ph-tray"></i>
-                    </div>
-                    <h6 class="fw-bold text-dark">No Survey Records in Database</h6>
-                    <p class="text-muted small mb-0">Use the Smart Assessment Generator above to generate test or bulk records.</p>
-                </div>
-            <?php endif; ?>
+            </div>
         </div>
     </div>
 </div>
@@ -2664,6 +2889,17 @@ try {
             $(`#svcShare_${i}`).text(pct + '%');
         }
 
+        // Live sync with Overall Responses & Total Transaction card below
+        if (total > 0) {
+            for (let i = 1; i <= 13; i++) {
+                const val = values[i] || 0;
+                $(`#cardResp_${i}`).text(val.toLocaleString());
+                $(`#cardTt_${i}`).val(val);
+            }
+            $('#activeMonthTotalRespBadge').text(total.toLocaleString());
+            recalcCardOverallTotal();
+        }
+
         // ARTA 500 status indicator
         const noticeEl = $('#svcTableArtaNotice');
         if (total >= 500) {
@@ -2673,6 +2909,35 @@ try {
             noticeEl.html(`<span class="text-warning-emphasis fw-bold"><i class="ph-bold ph-info"></i> ${total.toLocaleString()} responses (Add ${diff.toLocaleString()} to reach 500 ARTA target)</span>`);
         } else {
             noticeEl.html(`<span class="text-muted"><i class="ph-bold ph-target"></i> Target: 500 responses for official ARTA submission</span>`);
+        }
+    }
+
+    function recalcCardOverallTotal() {
+        let sumTt = 0;
+        let sumResp = 0;
+
+        $('.overall-tt-input').each(function() {
+            const val = parseInt($(this).val(), 10) || 0;
+            sumTt += val;
+        });
+
+        for (let i = 1; i <= 13; i++) {
+            const rTxt = $(`#cardResp_${i}`).text().replace(/[^0-9]/g, '');
+            const rVal = parseInt(rTxt, 10) || 0;
+            sumResp += rVal;
+        }
+
+        $('#cardExternalTotalResp').text(sumResp.toLocaleString());
+        $('#cardOverallFinalResp').text(sumResp.toLocaleString());
+        $('#cardExternalTotalTt').text(sumTt.toLocaleString());
+        $('#cardOverallFinalTt').text(sumTt.toLocaleString());
+
+        // Update share percentages in Overall Responses card
+        for (let i = 1; i <= 13; i++) {
+            const rTxt = $(`#cardResp_${i}`).text().replace(/[^0-9]/g, '');
+            const rVal = parseInt(rTxt, 10) || 0;
+            const pct = sumResp > 0 ? ((rVal / sumResp) * 100).toFixed(1) : '0.0';
+            $(`#cardShare_${i}`).text(pct + '%');
         }
     }
 
@@ -2727,8 +2992,11 @@ try {
     function clearAllSvcTable() {
         for (let i = 1; i <= 13; i++) {
             $(`#svcQuota_${i}`).val(0);
+            $(`#cardResp_${i}`).text('0');
+            $(`#cardTt_${i}`).val(0);
         }
         updateSvcTableTotal();
+        recalcCardOverallTotal();
     }
 
     function stepSvcInput(idx, step) {
@@ -2952,9 +3220,10 @@ try {
         HTMLFormElement.prototype.submit.call(document.getElementById('generatorForm'));
     }
 
-    // Initialize Service Table live counter on page load
+    // Initialize Service Table live counter and Overall Responses table on page load
     $(document).ready(function() {
         updateSvcTableTotal();
+        recalcCardOverallTotal();
     });
 
     function copyCurrentTargetMonth(btn) {
