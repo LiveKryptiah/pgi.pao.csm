@@ -48,6 +48,87 @@ $transactionTypes = [
     "Posting"
 ];
 
+$servicesMeta = [
+    1  => [
+        'name'  => 'Transfer',
+        'title' => 'Transfer / Paglilipat',
+        'desc'  => 'Pagpasya sa Pagsasagawa ng Tasasyon mula sa MAO at Opisina',
+        'color' => '#2563eb'
+    ],
+    2  => [
+        'name'  => 'Subdivision/Consolidation',
+        'title' => 'Subdivision / Consolidation',
+        'desc'  => 'Paghati-hati / Pagkonsolida o Maiiwang Parte sa Ililipat',
+        'color' => '#0284c7'
+    ],
+    3  => [
+        'name'  => 'Reclassification (Agri to Urban)',
+        'title' => 'Reclassification (Agri to Urban)',
+        'desc'  => 'Pagreklasipika ng Lupa mula Agrikultural tungo sa Residensiyal / Komersyal',
+        'color' => '#16a34a'
+    ],
+    4  => [
+        'name'  => 'Reclassification (Urban to Urban)',
+        'title' => 'Reclassification (Urban to Urban)',
+        'desc'  => 'Pagreklasipika mula Residensiyal tungo sa Komersyal / Industriyal / Espesyal',
+        'color' => '#0d9488'
+    ],
+    5  => [
+        'name'  => 'Reassessment (DP/PC/DT)',
+        'title' => 'Reassessment (DP / PC / DT)',
+        'desc'  => 'Pagbabago ng Detalye sa Deklarasyon ng Ari-arian',
+        'color' => '#e11d48'
+    ],
+    6  => [
+        'name'  => 'Discovery/New Declaration',
+        'title' => 'Discovery / New Declaration',
+        'desc'  => 'Pagdeklara ng Ari-arian sa Unang Pagkakataon',
+        'color' => '#d97706'
+    ],
+    7  => [
+        'name'  => 'Certification/CTC/CPC',
+        'title' => 'Certification / CTC / CPC',
+        'desc'  => 'Paghingi / Pagkuha ng Sertipikasyon o Sertipikadong Kopya / Photocopy',
+        'color' => '#7c3aed'
+    ],
+    8  => [
+        'name'  => 'Verification/Back Tracking',
+        'title' => 'Verification / Back Tracking',
+        'desc'  => 'Pagberipika ng Kasaysayan o Nangyari sa Ari-ariang Hindi Natitinag',
+        'color' => '#4f46e5'
+    ],
+    9  => [
+        'name'  => 'Annotation/Cancellation of Annotation',
+        'title' => 'Annotation / Cancellation',
+        'desc'  => 'Anotasyon o Kanselasyon ng Pagkakasanla, Piyansa at Paghahabol',
+        'color' => '#9333ea'
+    ],
+    10 => [
+        'name'  => 'Ocular Inspection',
+        'title' => 'Ocular Inspection',
+        'desc'  => 'Pag-inspeksyon / Pagsusuri sa mga Ari-arian ng Kasapi sa Panlalawigan',
+        'color' => '#ca8a04'
+    ],
+    11 => [
+        'name'  => 'Cancellation of TD',
+        'title' => 'Cancellation of TD',
+        'desc'  => 'Kanselasyon ng Nadobleng Ari-arian, Ginibang Gusali, o Retiradong Makinarya',
+        'color' => '#dc2626'
+    ],
+    12 => [
+        'name'  => 'TMCR/Section Map/s',
+        'title' => 'TMCR / Section Maps',
+        'desc'  => 'Paghingi ng Sertipikadong Kopya ng Tax Map Control Roll o Section Map',
+        'color' => '#0891b2'
+    ],
+    13 => [
+        'name'  => 'Posting',
+        'title' => 'Posting sa Bulletin Board',
+        'desc'  => 'Pagpaskil sa Bulletin Board ng Opisina ng Panlalawigang Tagatasa',
+        'color' => '#475569'
+    ]
+];
+
 $isabelaLocations = [
     "Alicia", "Angadanan", "Aurora", "Benito Soliven", "Burgos", "Cabagan", "Cabatuan", "Cauayan City", "Cordon", "Delfin Albano", 
     "Dinapigue", "Divilacan", "Echague", "Gamu", "Ilagan City", "Jones", "Luna", "Maconacon", "Mallig", "Naguilian", "Palanan", 
@@ -1055,6 +1136,65 @@ try {
             box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
         }
 
+        /* SERVICE TABLE INSERTION STYLES */
+        .generator-nav-pills .nav-link {
+            background-color: var(--bg-surface);
+            color: var(--text-body);
+            border: 1px solid var(--border-subtle);
+            transition: all 0.15s ease;
+        }
+        .generator-nav-pills .nav-link.active {
+            background-color: var(--primary) !important;
+            color: #ffffff !important;
+            border-color: var(--primary) !important;
+            box-shadow: 0 2px 4px rgba(5, 150, 105, 0.25);
+        }
+        .generator-nav-pills .nav-link.active i,
+        .generator-nav-pills .nav-link.active span {
+            color: #ffffff !important;
+        }
+        .generator-nav-pills .nav-link:hover:not(.active) {
+            background-color: var(--border-light);
+            color: var(--text-heading);
+        }
+
+        .svc-card-row {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-subtle) !important;
+            transition: all 0.15s ease;
+        }
+        .svc-card-row:hover {
+            border-color: var(--primary) !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        [data-bs-theme="dark"] .svc-card-row {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+        }
+        [data-bs-theme="dark"] .svc-card-row:hover {
+            border-color: #10b981 !important;
+        }
+        [data-bs-theme="dark"] .svc-quota-input {
+            background-color: #0f172a !important;
+            border-color: #334155 !important;
+            color: #f1f5f9 !important;
+        }
+        [data-bs-theme="dark"] .svc-share-pct {
+            background-color: #0f172a !important;
+            color: #94a3b8 !important;
+            border-color: #334155 !important;
+        }
+        [data-bs-theme="dark"] .generator-nav-pills .nav-link:not(.active) {
+            background-color: #1e293b !important;
+            color: #94a3b8 !important;
+            border-color: #334155 !important;
+        }
+        [data-bs-theme="dark"] .generator-nav-pills .nav-link:hover:not(.active) {
+            color: #f1f5f9 !important;
+            background-color: #334155 !important;
+        }
+
         /* CUSTOM SCROLLBAR */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -1174,7 +1314,7 @@ try {
             </div> 
         <?php endif; ?>
 
-        <!-- SMART AUTO-GENERATOR PANEL -->
+        <!-- SMART AUTO-GENERATOR & SERVICE TABLE INSERTION PANEL -->
         <div class="card-minimal mb-4">
             <div class="card-header-clean flex-wrap gap-2">
                 <div class="d-flex align-items-center gap-2.5">
@@ -1182,8 +1322,8 @@ try {
                         <i class="ph-bold ph-sparkle"></i>
                     </div>
                     <div>
-                        <h6 class="card-title-clean">Smart Assessment Generator</h6>
-                        <span class="text-muted" style="font-size: 0.76rem;">Directly generates and commits synthetic survey records with prioritized 4 & 5 ratings. Excludes PH holidays & weekends.</span>
+                        <h6 class="card-title-clean">Assessment Generator &amp; Service Quota Insertion</h6>
+                        <span class="text-muted" style="font-size: 0.76rem;">Generate exact service quota responses or random batch assessments with prioritized 4 &amp; 5 ratings. Excludes PH holidays &amp; weekends.</span>
                     </div>
                 </div>
                 
@@ -1199,92 +1339,251 @@ try {
                     </form>
                 </div>
             </div>
-            
-            <form id="generatorForm" method="POST" action="admin_bulk.php">
-                <input type="hidden" name="bulk_json" id="bulkJsonInput" value="">
-                
-                <!-- Row 1: Target Month, Record Count, Client Type, SQD Rating Priority -->
-                <div class="row g-3 align-items-end pt-2">
-                    <div class="col-md-3 col-sm-6">
-                        <label class="form-label text-muted small fw-bold mb-1">Target Month</label>
-                        <input type="month" id="genMonth" class="form-control form-control-sm fw-semibold" value="<?= date('Y-m') ?>" required>
+
+            <!-- MODE NAVIGATION TABS -->
+            <ul class="nav nav-pills generator-nav-pills gap-2 mb-3 border-bottom pb-3" id="genModeTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active fw-bold px-3 py-2 d-inline-flex align-items-center gap-2 rounded-3" id="tab-service-table-btn" data-bs-toggle="pill" data-bs-target="#tab-service-table-pane" type="button" role="tab" aria-controls="tab-service-table-pane" aria-selected="true">
+                        <i class="ph-bold ph-table fs-5"></i>
+                        <span>Service Table Insertion (Exact Quotas)</span>
+                        <span class="badge bg-white text-primary rounded-pill px-2 py-0.5 shadow-xs" style="font-size: 0.68rem; font-weight: 800;">Recommended</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link fw-bold px-3 py-2 d-inline-flex align-items-center gap-2 rounded-3 text-secondary" id="tab-quick-random-btn" data-bs-toggle="pill" data-bs-target="#tab-quick-random-pane" type="button" role="tab" aria-controls="tab-quick-random-pane" aria-selected="false">
+                        <i class="ph-bold ph-sparkle fs-5"></i>
+                        <span>Quick Random Generator</span>
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="genModeTabContent">
+                <!-- ================= TAB 1: SERVICE TABLE INSERTION (EXACT QUOTAS) ================= -->
+                <div class="tab-pane fade show active" id="tab-service-table-pane" role="tabpanel" aria-labelledby="tab-service-table-btn">
+                    
+                    <!-- Row 1: Target Month, Client Type, SQD Quality, Municipality -->
+                    <div class="row g-3 align-items-end pt-1">
+                        <div class="col-md-3 col-sm-6">
+                            <label class="form-label text-muted small fw-bold mb-1">Target Month</label>
+                            <input type="month" id="svcTableMonth" class="form-control form-control-sm fw-semibold" value="<?= date('Y-m') ?>" required>
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <label class="form-label text-muted small fw-bold mb-1">Client Type</label>
+                            <select id="svcTableClient" class="form-select form-select-sm fw-semibold">
+                                <option value="Random" selected>🎲 Randomize (85% Citizen, 10% Business, 5% Gov)</option>
+                                <option value="Citizen">Citizen Only</option>
+                                <option value="Business">Business Only</option>
+                                <option value="Government">Government Only</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <label class="form-label text-muted small fw-bold mb-1">SQD Quality Rating</label>
+                            <select id="svcTableSqd" class="form-select form-select-sm fw-semibold">
+                                <option value="Prioritize45" selected>⭐ Prioritize 4 &amp; 5 (~65% 5s, ~35% 4s)</option>
+                                <option value="NaturalMix">🎲 Natural Mix (60% 5s, 35% 4s, 5% 3s)</option>
+                                <option value="Balanced45">⚖️ Balanced 4 &amp; 5 (50% 5s, 50% 4s)</option>
+                                <option value="All5">🌟 All 5s Only (100% Strongly Agree)</option>
+                                <option value="All4">👍 All 4s Only (100% Agree)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <label class="form-label text-muted small fw-bold mb-1">Municipality / City</label>
+                            <select id="svcTableMuni" class="form-select form-select-sm fw-semibold">
+                                <option value="Random" selected>🎲 Randomize (All Isabela)</option>
+                                <?php foreach ($isabelaLocations as $m): ?>
+                                    <option value="<?php echo htmlspecialchars($m); ?>"><?php echo htmlspecialchars($m); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
                     </div>
-                    <div class="col-md-2 col-sm-6">
-                        <label class="form-label text-muted small fw-bold mb-1">Record Count</label>
-                        <input type="number" id="genCount" class="form-control form-control-sm fw-semibold" value="10" min="1" max="500" required>
+
+                    <!-- Preset & Total Quota Bar -->
+                    <div class="d-flex align-items-center justify-content-between p-2.5 my-3 rounded-3 border bg-light flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="fw-bold small text-muted text-uppercase tracking-wider" style="font-size:0.7rem;">Quick Presets:</span>
+                            <button type="button" class="btn btn-sm btn-outline-primary fw-bold rounded-2 px-2.5 py-1 d-inline-flex align-items-center gap-1.5" onclick="presetExampleSvc()" title="Pre-fill user example: Transfer: 242, Certification: 443, etc.">
+                                <i class="ph-bold ph-lightbulb text-warning"></i>
+                                <span>Example: 242 Transfer, 443 Cert...</span>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary fw-bold rounded-2 px-2.5 py-1 d-inline-flex align-items-center gap-1.5" onclick="preset500Svc()" title="Pre-fill 500 ARTA standard distribution">
+                                <i class="ph-bold ph-target text-success"></i>
+                                <span>500 ARTA Standard</span>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold rounded-2 px-2 py-1 text-muted" onclick="clearAllSvcTable()" title="Reset all counts to 0">
+                                <i class="ph-bold ph-arrow-counter-clockwise"></i> Clear All (0)
+                            </button>
+                        </div>
+
+                        <div class="d-flex align-items-center gap-3 ms-auto flex-wrap">
+                            <div id="svcTableArtaNotice" class="small fw-semibold text-muted">
+                                <i class="ph-bold ph-target"></i> Target: 500 responses
+                            </div>
+                            <div class="d-flex align-items-center gap-1.5 bg-white border px-3 py-1 rounded-2 shadow-xs">
+                                <span class="text-muted small fw-bold">Total Quota:</span>
+                                <span id="svcTableTotalBadge" class="fw-bolder text-primary fs-6">0</span>
+                                <span class="text-muted small">responses</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-md-3 col-sm-6">
-                        <label class="form-label text-muted small fw-bold mb-1">Client Type</label>
-                        <select id="genClient" class="form-select form-select-sm fw-semibold">
-                            <option value="Random">🎲 Randomize (Weighted)</option>
-                            <option value="Citizen">Citizen Only</option>
-                            <option value="Business">Business Only</option>
-                            <option value="Government">Government Only</option>
-                        </select>
+
+                    <!-- 13 Services Quota Grid -->
+                    <div class="row g-2.5" id="svcGridContainer">
+                        <?php foreach ($servicesMeta as $idx => $s): ?>
+                            <div class="col-lg-6 col-12">
+                                <div class="p-2.5 rounded-3 border bg-white d-flex align-items-center justify-content-between gap-2 shadow-xs svc-card-row">
+                                    <div class="d-flex align-items-center gap-2.5 text-truncate" style="min-width: 0;">
+                                        <div class="svc-icon-badge flex-shrink-0 d-flex align-items-center justify-content-center rounded-2 fw-bold" style="width:34px; height:34px; background-color: <?= $s['color'] ?>15; color: <?= $s['color'] ?>; font-size: 0.8rem;">
+                                            #<?= $idx ?>
+                                        </div>
+                                        <div class="text-truncate">
+                                            <div class="fw-bold text-dark small text-truncate" title="<?= htmlspecialchars($s['title']) ?>">
+                                                <?= htmlspecialchars($s['title']) ?>
+                                            </div>
+                                            <div class="text-muted text-truncate" style="font-size: 0.71rem;" title="<?= htmlspecialchars($s['desc']) ?>">
+                                                <?= htmlspecialchars($s['desc']) ?>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                                        <div class="input-group input-group-sm" style="width: 140px;">
+                                            <button type="button" class="btn btn-outline-secondary px-2 fw-bold" onclick="stepSvcInput(<?= $idx ?>, -10)" title="Subtract 10">-</button>
+                                            <input type="number" min="0" max="5000" class="form-control text-center fw-bold svc-quota-input" id="svcQuota_<?= $idx ?>" data-service-idx="<?= $idx ?>" data-service-name="<?= htmlspecialchars($s['name']) ?>" value="0" oninput="updateSvcTableTotal()">
+                                            <button type="button" class="btn btn-outline-secondary px-2 fw-bold" onclick="stepSvcInput(<?= $idx ?>, 10)" title="Add 10">+</button>
+                                        </div>
+                                        <span class="badge bg-light text-secondary border small svc-share-pct" id="svcShare_<?= $idx ?>" style="min-width: 44px; text-align: center;">0%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
                     </div>
-                    <div class="col-md-4 col-sm-6">
-                        <label class="form-label text-muted small fw-bold mb-1">SQD Rating (Quality)</label>
-                        <select id="genSqd" class="form-select form-select-sm fw-semibold">
-                            <option value="Prioritize45" selected>⭐ Prioritize 4 & 5 (Weighted: ~65% 5s, ~35% 4s)</option>
-                            <option value="NaturalMix">🎲 Natural Mix (60% 5s, 35% 4s, 5% 3s)</option>
-                            <option value="Balanced45">⚖️ Balanced 4 & 5 (50% 5s, 50% 4s)</option>
-                            <option value="All5">🌟 All 5s Only (100% Strongly Agree)</option>
-                            <option value="All4">👍 All 4s Only (100% Agree)</option>
-                        </select>
+
+                    <!-- Bottom Action & DB Protection Bar -->
+                    <div class="p-3 bg-light rounded-3 border mt-3 d-flex align-items-center justify-content-between flex-wrap gap-3">
+                        <div class="d-flex align-items-center gap-3 flex-wrap">
+                            <!-- Neon Database Protection Switch -->
+                            <div class="form-check form-switch mb-0 d-inline-flex align-items-center gap-2 bg-white px-3 py-2 rounded-3 border shadow-sm">
+                                <input class="form-check-input ms-0 mt-0" type="checkbox" id="svcTableSaveToDbToggle" style="cursor: pointer; width: 2.2em; height: 1.2em;">
+                                <label class="form-check-label fw-bold small text-dark" for="svcTableSaveToDbToggle" style="cursor: pointer;">
+                                    Save to Database (Neon)
+                                </label>
+                            </div>
+                            <div id="svcTableModeNotice" class="d-flex align-items-center gap-1.5 text-success small fw-semibold">
+                                <i class="ph-bold ph-shield-check fs-5"></i>
+                                <span>Protected: Generates in-memory for Excel copy &amp; report printing. Zero records inserted into Neon.</span>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center gap-2 flex-wrap ms-auto">
+                            <!-- Action 1: Copy for Excel -->
+                            <button type="button" class="btn btn-outline-success fw-bold py-2 px-3 rounded-3 d-inline-flex align-items-center gap-2 shadow-xs" id="svcCopyExcelBtn" onclick="copyServiceTableData(this)" title="Generate exact service quota responses and copy 25 columns for cell F15">
+                                <i class="ph-bold ph-copy fs-5"></i>
+                                <span>Generate &amp; Copy for Excel</span>
+                            </button>
+
+                            <!-- Action 2: Print Official CSM Report -->
+                            <button type="button" class="btn btn-primary fw-bold py-2 px-3 rounded-3 shadow-sm d-inline-flex align-items-center gap-2" id="svcPrintReportBtn" onclick="printServiceTableReport(this)" title="Open official 4-page ARTA CSM Report with exact tallies in new window">
+                                <i class="ph-bold ph-printer fs-5"></i>
+                                <span>Print Official CSM Report</span>
+                            </button>
+
+                            <!-- Action 3: Save to Database (shown when toggle is ON) -->
+                            <button type="button" class="btn btn-warning fw-bold py-2 px-3 rounded-3 d-none align-items-center gap-2 shadow-sm" id="svcSaveDbBtn" onclick="saveServiceTableToDatabase(this)">
+                                <i class="ph-bold ph-cloud-arrow-up fs-5"></i>
+                                <span>Save to Neon Database</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Row 2: Municipality / City & Transaction Type -->
-                <div class="row g-3 align-items-end pt-2 mt-0">
-                    <div class="col-md-6 col-sm-12">
-                        <label class="form-label text-muted small fw-bold mb-1">Municipality / City</label>
-                        <select id="genMuni" class="form-select form-select-sm fw-semibold">
-                            <option value="Random">🎲 Randomize (All Isabela)</option>
-                            <?php foreach ($isabelaLocations as $m): ?>
-                                <option value="<?php echo htmlspecialchars($m); ?>"><?php echo htmlspecialchars($m); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-md-6 col-sm-12">
-                        <label class="form-label text-muted small fw-bold mb-1">Transaction Type</label>
-                        <select id="genTransaction" class="form-select form-select-sm fw-semibold">
-                            <option value="Random">🎲 Randomize (All 13 Types Evenly)</option>
-                            <option value="RandomWeighted">🎲 Randomize (Weighted - Cert/Trans/Sub)</option>
-                            <optgroup label="Select Specific Transaction">
-                            <?php foreach ($transactionTypes as $t): ?>
-                                <option value="<?php echo htmlspecialchars($t); ?>"><?php echo htmlspecialchars($t); ?></option>
-                            <?php endforeach; ?>
-                            </optgroup>
-                        </select>
-                    </div>
-                </div>
+                <!-- ================= TAB 2: QUICK RANDOM GENERATOR ================= -->
+                <div class="tab-pane fade" id="tab-quick-random-pane" role="tabpanel" aria-labelledby="tab-quick-random-btn">
+                    <form id="generatorForm" method="POST" action="admin_bulk.php">
+                        <input type="hidden" name="bulk_json" id="bulkJsonInput" value="">
+                        
+                        <!-- Row 1: Target Month, Record Count, Client Type, SQD Rating Priority -->
+                        <div class="row g-3 align-items-end pt-2">
+                            <div class="col-md-3 col-sm-6">
+                                <label class="form-label text-muted small fw-bold mb-1">Target Month</label>
+                                <input type="month" id="genMonth" class="form-control form-control-sm fw-semibold" value="<?= date('Y-m') ?>" required>
+                            </div>
+                            <div class="col-md-2 col-sm-6">
+                                <label class="form-label text-muted small fw-bold mb-1">Record Count</label>
+                                <input type="number" id="genCount" class="form-control form-control-sm fw-semibold" value="10" min="1" max="500" required>
+                            </div>
+                            <div class="col-md-3 col-sm-6">
+                                <label class="form-label text-muted small fw-bold mb-1">Client Type</label>
+                                <select id="genClient" class="form-select form-select-sm fw-semibold">
+                                    <option value="Random">🎲 Randomize (Weighted)</option>
+                                    <option value="Citizen">Citizen Only</option>
+                                    <option value="Business">Business Only</option>
+                                    <option value="Government">Government Only</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 col-sm-6">
+                                <label class="form-label text-muted small fw-bold mb-1">SQD Rating (Quality)</label>
+                                <select id="genSqd" class="form-select form-select-sm fw-semibold">
+                                    <option value="Prioritize45" selected>⭐ Prioritize 4 &amp; 5 (Weighted: ~65% 5s, ~35% 4s)</option>
+                                    <option value="NaturalMix">🎲 Natural Mix (60% 5s, 35% 4s, 5% 3s)</option>
+                                    <option value="Balanced45">⚖️ Balanced 4 &amp; 5 (50% 5s, 50% 4s)</option>
+                                    <option value="All5">🌟 All 5s Only (100% Strongly Agree)</option>
+                                    <option value="All4">👍 All 4s Only (100% Agree)</option>
+                                </select>
+                            </div>
+                        </div>
 
-                <div class="d-flex align-items-center justify-content-between pt-3 mt-3 border-top flex-wrap gap-3">
-                    <div class="d-flex align-items-center gap-3 flex-wrap">
-                        <!-- Neon Database Protection Toggle Switch -->
-                        <div class="form-check form-switch mb-0 d-inline-flex align-items-center gap-2 bg-light px-3 py-2 rounded-3 border shadow-sm">
-                            <input class="form-check-input ms-0 mt-0" type="checkbox" id="saveToDbToggle" name="save_to_database" value="1" style="cursor: pointer; width: 2.2em; height: 1.2em;">
-                            <label class="form-check-label fw-bold small text-dark" for="saveToDbToggle" style="cursor: pointer;">
-                                Save to Database (Neon)
-                            </label>
+                        <!-- Row 2: Municipality / City & Transaction Type -->
+                        <div class="row g-3 align-items-end pt-2 mt-0">
+                            <div class="col-md-6 col-sm-12">
+                                <label class="form-label text-muted small fw-bold mb-1">Municipality / City</label>
+                                <select id="genMuni" class="form-select form-select-sm fw-semibold">
+                                    <option value="Random">🎲 Randomize (All Isabela)</option>
+                                    <?php foreach ($isabelaLocations as $m): ?>
+                                        <option value="<?php echo htmlspecialchars($m); ?>"><?php echo htmlspecialchars($m); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6 col-sm-12">
+                                <label class="form-label text-muted small fw-bold mb-1">Transaction Type</label>
+                                <select id="genTransaction" class="form-select form-select-sm fw-semibold">
+                                    <option value="Random">🎲 Randomize (All 13 Types Evenly)</option>
+                                    <option value="RandomWeighted">🎲 Randomize (Weighted - Cert/Trans/Sub)</option>
+                                    <optgroup label="Select Specific Transaction">
+                                    <?php foreach ($transactionTypes as $t): ?>
+                                        <option value="<?php echo htmlspecialchars($t); ?>"><?php echo htmlspecialchars($t); ?></option>
+                                    <?php endforeach; ?>
+                                    </optgroup>
+                                </select>
+                            </div>
                         </div>
-                        <div id="genModeNotice" class="d-flex align-items-center gap-1.5 text-success small fw-semibold">
-                            <i class="ph-bold ph-shield-check fs-5"></i>
-                            <span>Protected: Generates in-memory for Excel copy. Zero records inserted into Neon.</span>
+
+                        <div class="d-flex align-items-center justify-content-between pt-3 mt-3 border-top flex-wrap gap-3">
+                            <div class="d-flex align-items-center gap-3 flex-wrap">
+                                <!-- Neon Database Protection Toggle Switch -->
+                                <div class="form-check form-switch mb-0 d-inline-flex align-items-center gap-2 bg-light px-3 py-2 rounded-3 border shadow-sm">
+                                    <input class="form-check-input ms-0 mt-0" type="checkbox" id="saveToDbToggle" name="save_to_database" value="1" style="cursor: pointer; width: 2.2em; height: 1.2em;">
+                                    <label class="form-check-label fw-bold small text-dark" for="saveToDbToggle" style="cursor: pointer;">
+                                        Save to Database (Neon)
+                                    </label>
+                                </div>
+                                <div id="genModeNotice" class="d-flex align-items-center gap-1.5 text-success small fw-semibold">
+                                    <i class="ph-bold ph-shield-check fs-5"></i>
+                                    <span>Protected: Generates in-memory for Excel copy. Zero records inserted into Neon.</span>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2 flex-wrap ms-auto">
+                                <button type="button" class="btn btn-outline-success fw-bold py-2 px-3 rounded-3 d-inline-flex align-items-center gap-2" onclick="copyCurrentTargetMonth(this)" title="Copy 25-column CSM data table for selected Target Month">
+                                    <i class="ph-bold ph-copy fs-5"></i>
+                                    <span>Copy Target Month Data</span>
+                                </button>
+                                <button type="submit" id="generateBtn" class="btn-modern-primary py-2 px-4 fw-bold shadow-sm d-inline-flex align-items-center gap-2">
+                                    <i id="generateBtnIcon" class="ph-bold ph-sparkle text-warning fs-5"></i>
+                                    <span id="generateBtnText">Generate &amp; Copy for Excel</span>
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                    <div class="d-flex align-items-center gap-2 flex-wrap ms-auto">
-                        <button type="button" class="btn btn-outline-success fw-bold py-2 px-3 rounded-3 d-inline-flex align-items-center gap-2" onclick="copyCurrentTargetMonth(this)" title="Copy 25-column CSM data table for selected Target Month">
-                            <i class="ph-bold ph-copy fs-5"></i>
-                            <span>Copy Target Month Data</span>
-                        </button>
-                        <button type="submit" id="generateBtn" class="btn-modern-primary py-2 px-4 fw-bold shadow-sm d-inline-flex align-items-center gap-2">
-                            <i id="generateBtnIcon" class="ph-bold ph-sparkle text-warning fs-5"></i>
-                            <span id="generateBtnText">Generate & Copy for Excel</span>
-                        </button>
-                    </div>
+                    </form>
                 </div>
-            </form>
+            </div>
         </div>
 
         <!-- DATABASE RECORDS SUMMARY BY MONTH CARD -->
@@ -1652,8 +1951,8 @@ try {
         "Posting"
     ];
 
-    // DATE RANDOMIZER LOGIC (Excludes Holidays, Fri, Sat, Sun)
-    function getRandomValidDate(year, monthIndex) {
+    // WORKING DATES (Excludes Holidays, Fri, Sat, Sun - strictly Monday to Thursday)
+    function getAllValidWorkingDates(year, monthIndex) {
         const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
         let validDates = [];
 
@@ -1682,8 +1981,13 @@ try {
         }
         
         // Failsafe in case a month has zero valid days (very rare)
-        if (validDates.length === 0) return `${year}-${String(monthIndex+1).padStart(2,'0')}-01`; 
+        if (validDates.length === 0) validDates.push(`${year}-${String(monthIndex+1).padStart(2,'0')}-01`); 
         
+        return validDates;
+    }
+
+    function getRandomValidDate(year, monthIndex) {
+        const validDates = getAllValidWorkingDates(year, monthIndex);
         return validDates[Math.floor(Math.random() * validDates.length)];
     }
 
@@ -2336,6 +2640,322 @@ try {
             btn.prop('disabled', false);
         }, 2000);
     }
+
+    // ==========================================
+    // SERVICE TABLE INSERTION (EXACT QUOTAS) LOGIC
+    // ==========================================
+
+    function updateSvcTableTotal() {
+        let total = 0;
+        const values = {};
+        $('.svc-quota-input').each(function() {
+            const idx = $(this).data('service-idx');
+            const val = parseInt($(this).val(), 10) || 0;
+            values[idx] = val;
+            total += val;
+        });
+
+        $('#svcTableTotalBadge').text(total.toLocaleString());
+
+        // Update percentage shares for each service row
+        for (let i = 1; i <= 13; i++) {
+            const val = values[i] || 0;
+            const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0';
+            $(`#svcShare_${i}`).text(pct + '%');
+        }
+
+        // ARTA 500 status indicator
+        const noticeEl = $('#svcTableArtaNotice');
+        if (total >= 500) {
+            noticeEl.html(`<span class="text-success fw-bold"><i class="ph-bold ph-check-circle"></i> Meets ARTA Standard (${total.toLocaleString()} / 500 minimum)</span>`);
+        } else if (total > 0) {
+            const diff = 500 - total;
+            noticeEl.html(`<span class="text-warning-emphasis fw-bold"><i class="ph-bold ph-info"></i> ${total.toLocaleString()} responses (Add ${diff.toLocaleString()} to reach 500 ARTA target)</span>`);
+        } else {
+            noticeEl.html(`<span class="text-muted"><i class="ph-bold ph-target"></i> Target: 500 responses for official ARTA submission</span>`);
+        }
+    }
+
+    function presetExampleSvc() {
+        // User example: Transfer 242, Certification 443, and PAO services
+        const exampleCounts = {
+            1: 242, // Transfer
+            2: 35,  // Subdivision/Consolidation
+            3: 10,  // Reclassification (Agri to Urban)
+            4: 8,   // Reclassification (Urban to Urban)
+            5: 18,  // Reassessment (DP/PC/DT)
+            6: 12,  // Discovery/New Declaration
+            7: 443, // Certification/CTC/CPC
+            8: 22,  // Verification/Back Tracking
+            9: 9,   // Annotation/Cancellation
+            10: 6,  // Ocular Inspection
+            11: 4,  // Cancellation of TD
+            12: 11, // TMCR/Section Maps
+            13: 5   // Posting
+        };
+        for (let i = 1; i <= 13; i++) {
+            $(`#svcQuota_${i}`).val(exampleCounts[i] || 0);
+        }
+        updateSvcTableTotal();
+        showCopyToast('Example Preset Loaded!', 'Transfer: 242, Certification: 443, and other services (Total: 825 responses).');
+    }
+
+    function preset500Svc() {
+        // Official 500 ARTA standard distribution
+        const artaCounts = {
+            1: 140, // Transfer
+            2: 45,  // Subdivision/Consolidation
+            3: 6,   // Reclassification (Agri to Urban)
+            4: 5,   // Reclassification (Urban to Urban)
+            5: 25,  // Reassessment (DP/PC/DT)
+            6: 10,  // Discovery/New Declaration
+            7: 230, // Certification/CTC/CPC
+            8: 20,  // Verification/Back Tracking
+            9: 7,   // Annotation/Cancellation
+            10: 3,  // Ocular Inspection
+            11: 2,  // Cancellation of TD
+            12: 5,  // TMCR/Section Maps
+            13: 2   // Posting
+        };
+        for (let i = 1; i <= 13; i++) {
+            $(`#svcQuota_${i}`).val(artaCounts[i] || 0);
+        }
+        updateSvcTableTotal();
+        showCopyToast('500 ARTA Standard Loaded!', 'Standard PAO Isabela service distribution totaling exactly 500 responses.');
+    }
+
+    function clearAllSvcTable() {
+        for (let i = 1; i <= 13; i++) {
+            $(`#svcQuota_${i}`).val(0);
+        }
+        updateSvcTableTotal();
+    }
+
+    function stepSvcInput(idx, step) {
+        const input = $(`#svcQuota_${idx}`);
+        let val = (parseInt(input.val(), 10) || 0) + step;
+        if (val < 0) val = 0;
+        input.val(val);
+        updateSvcTableTotal();
+    }
+
+    // Toggle Save to Database in Service Table
+    $('#svcTableSaveToDbToggle').on('change', function() {
+        const isSaveToDb = $(this).is(':checked');
+        if (isSaveToDb) {
+            $('#svcSaveDbBtn').removeClass('d-none').addClass('d-inline-flex');
+            $('#svcTableModeNotice').removeClass('text-success').addClass('text-warning-emphasis').html(
+                '<i class="ph-bold ph-warning fs-5 text-warning"></i> <span>Notice: Will permanently insert records into Neon cloud database.</span>'
+            );
+        } else {
+            $('#svcSaveDbBtn').addClass('d-none').removeClass('d-inline-flex');
+            $('#svcTableModeNotice').removeClass('text-warning-emphasis').addClass('text-success').html(
+                '<i class="ph-bold ph-shield-check fs-5"></i> <span>Protected: Generates in-memory for Excel copy &amp; report printing. Zero records inserted into Neon.</span>'
+            );
+        }
+    });
+
+    function generateServiceTableRecords() {
+        const monthVal = $('#svcTableMonth').val(); // e.g. "2026-10"
+        if (!monthVal) {
+            alert('Please select a Target Month first.');
+            return null;
+        }
+
+        const clientMode = $('#svcTableClient').val();
+        const sqdMode = $('#svcTableSqd').val() || 'Prioritize45';
+        const muniMode = $('#svcTableMuni').val();
+
+        // Collect quotas
+        const quotas = [];
+        let totalCount = 0;
+        $('.svc-quota-input').each(function() {
+            const idx = parseInt($(this).data('service-idx'), 10);
+            const name = $(this).data('service-name');
+            const count = parseInt($(this).val(), 10) || 0;
+            if (count > 0) {
+                quotas.push({ idx, name, count });
+                totalCount += count;
+            }
+        });
+
+        if (totalCount === 0) {
+            alert('Please enter at least one service quota count greater than 0.');
+            return null;
+        }
+
+        const year = parseInt(monthVal.split('-')[0], 10);
+        const monthIndex = parseInt(monthVal.split('-')[1], 10) - 1;
+        const workingDates = getAllValidWorkingDates(year, monthIndex);
+
+        const genders = ["Male", "Female"];
+        const records = [];
+        let datePointer = 0;
+
+        quotas.forEach(q => {
+            for (let i = 0; i < q.count; i++) {
+                const rDate = workingDates[datePointer % workingDates.length];
+                datePointer++;
+
+                const rClient = clientMode === "Random" ? getWeightedClient() : clientMode;
+                const rMuni = muniMode === "Random" ? isabelaLocations[Math.floor(Math.random() * isabelaLocations.length)] : muniMode;
+                const rGender = genders[Math.floor(Math.random() * genders.length)];
+
+                // Age group distribution
+                const ar = Math.random() * 100;
+                let rAge = '20-29';
+                if (ar < 4) rAge = '15-19';
+                else if (ar < 45) rAge = '20-29';
+                else if (ar < 75) rAge = '30-39';
+                else if (ar < 92) rAge = '40-49';
+                else if (ar < 97) rAge = '50-59';
+                else rAge = '60+';
+
+                // Realistic Citizen Charter responses
+                const cc1Roll = Math.random() * 100;
+                const rCc1 = (cc1Roll < 85) ? '1' : ((cc1Roll < 95) ? '3' : '2');
+                
+                const cc2Roll = Math.random() * 100;
+                const rCc2 = (cc2Roll < 75) ? '1' : ((cc2Roll < 95) ? '2' : '5');
+
+                const cc3Roll = Math.random() * 100;
+                const rCc3 = (cc3Roll < 80) ? '1' : ((cc3Roll < 95) ? '2' : '4');
+
+                const sqd = generateSqdScores(sqdMode);
+
+                records.push({
+                    survey_date:      rDate,
+                    client_type:      rClient,
+                    gender:           rGender,
+                    age_group:        rAge,
+                    region:           'Region II',
+                    province:         'Isabela',
+                    municipality:     rMuni,
+                    transaction_type: q.name,
+                    cc1:              rCc1,
+                    cc2:              rCc2,
+                    cc3:              rCc3,
+                    sqd0:             sqd.sqd0,
+                    sqd1:             sqd.sqd1,
+                    sqd2:             sqd.sqd2,
+                    sqd3:             sqd.sqd3,
+                    sqd4:             sqd.sqd4,
+                    sqd5:             sqd.sqd5,
+                    sqd6:             sqd.sqd6,
+                    sqd7:             sqd.sqd7,
+                    sqd8:             sqd.sqd8,
+                    suggestions:      ''
+                });
+            }
+        });
+
+        // Sort chronologically by date
+        records.sort((a, b) => (a.survey_date || '').localeCompare(b.survey_date || ''));
+
+        return {
+            monthVal,
+            records,
+            totalCount: records.length
+        };
+    }
+
+    async function copyServiceTableData(btn) {
+        const genData = generateServiceTableRecords();
+        if (!genData) return;
+
+        const { monthVal, records, totalCount } = genData;
+        const isSaveToDb = $('#svcTableSaveToDbToggle').is(':checked');
+
+        if (isSaveToDb) {
+            if (!confirm(`Save to Database is ENABLED. This will permanently insert ${totalCount} records into your Neon cloud database. Proceed?`)) {
+                return;
+            }
+            $('#bulkJsonInput').val(JSON.stringify(records));
+            $('#saveToDbToggle').prop('checked', true);
+            HTMLFormElement.prototype.submit.call(document.getElementById('generatorForm'));
+            return;
+        }
+
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `<i class="ph-bold ph-spinner-gap spin fs-5"></i> <span>Formatting ${totalCount} Records...</span>`;
+
+        const virtualExport = buildVirtualCsmExport(monthVal, records);
+        csmExportCache[monthVal] = virtualExport;
+
+        try {
+            await copyToClipboard(virtualExport.tsv_data_only);
+            const firstRowSample = (virtualExport.tsv_data_only.split('\n')[0] || '').split('\t')[0] || 'E10-001';
+            showCopyToast(
+                `Generated & Copied ${totalCount} Records (${virtualExport.month_label})!`,
+                `Ready to paste into cell F15 in Excel (starts with ${firstRowSample}). Zero records inserted into Neon.`
+            );
+        } catch (copyErr) {
+            console.error('Clipboard copy error:', copyErr);
+        }
+
+        // Open preview modal
+        openPreviewExportModal(monthVal, virtualExport.month_label, virtualExport.total_records);
+
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }, 600);
+    }
+
+    function printServiceTableReport(btn) {
+        const genData = generateServiceTableRecords();
+        if (!genData) return;
+
+        const { monthVal, records, totalCount } = genData;
+
+        // Submit custom records to print_report.php via hidden POST form
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = 'print_report.php';
+        form.target = '_blank';
+        form.style.display = 'none';
+
+        const mInput = document.createElement('input');
+        mInput.type = 'hidden';
+        mInput.name = 'month';
+        mInput.value = monthVal;
+        form.appendChild(mInput);
+
+        const jsonInput = document.createElement('input');
+        jsonInput.type = 'hidden';
+        jsonInput.name = 'custom_records_json';
+        jsonInput.value = JSON.stringify(records);
+        form.appendChild(jsonInput);
+
+        document.body.appendChild(form);
+        form.submit();
+        setTimeout(() => form.remove(), 1000);
+
+        showCopyToast(
+            `Generated Official CSM Report (${totalCount} Records)!`,
+            `Opening official 4-page ARTA report for ${monthVal} in a new tab with exact service tallies.`
+        );
+    }
+
+    function saveServiceTableToDatabase(btn) {
+        const genData = generateServiceTableRecords();
+        if (!genData) return;
+
+        const { records, totalCount } = genData;
+        if (!confirm(`Are you sure you want to permanently insert ${totalCount} records into your Neon cloud database?`)) {
+            return;
+        }
+
+        $('#bulkJsonInput').val(JSON.stringify(records));
+        $('#saveToDbToggle').prop('checked', true);
+        HTMLFormElement.prototype.submit.call(document.getElementById('generatorForm'));
+    }
+
+    // Initialize Service Table live counter on page load
+    $(document).ready(function() {
+        updateSvcTableTotal();
+    });
 
     function copyCurrentTargetMonth(btn) {
         const ym = $('#genMonth').val();

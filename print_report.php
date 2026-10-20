@@ -7,40 +7,61 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 require 'db.php';
 
 // ---------- MONTH & SAMPLE TARGET SELECTION ----------
-$month = $_GET['month'] ?? '';
+$month = $_POST['month'] ?? ($_GET['month'] ?? '');
 if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
     $month = date('Y-m');
 }
 $month_label = date('F Y', strtotime($month . '-01'));
 
-// Fetch real records for this month from the database (supporting Neon PostgreSQL & MySQL)
+// Target sample size (default 500 for official ARTA standard; 0 = Real DB Only)
+$target = isset($_POST['target']) ? (int)$_POST['target'] : (isset($_GET['target']) ? (int)$_GET['target'] : 500);
+if ($target < 0) $target = 0;
+
+// Check if custom records are provided via POST (e.g. from Service Table Insertion)
+$custom_records_json = $_POST['custom_records_json'] ?? '';
+$is_custom_dataset = false;
+$rows = [];
 $db_rows = [];
-if ($pdo) {
-    try {
-        $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
-        if ($driver === 'pgsql') {
-            $stmt = $pdo->prepare("SELECT * FROM responses WHERE TO_CHAR(survey_date, 'YYYY-MM') = ? ORDER BY survey_date ASC, id ASC");
-        } else {
-            $stmt = $pdo->prepare("SELECT * FROM responses WHERE DATE_FORMAT(survey_date, '%Y-%m') = ? ORDER BY survey_date ASC, id ASC");
-        }
-        $stmt->execute([$month]);
-        $db_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Throwable $e) {
-        // Fallback for custom DATE_FORMAT compatibility if defined
-        try {
-            $stmt = $pdo->prepare("SELECT * FROM responses WHERE DATE_FORMAT(survey_date, '%Y-%m') = ? ORDER BY survey_date ASC, id ASC");
-            $stmt->execute([$month]);
-            $db_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (Throwable $e2) {
-            $db_rows = [];
-        }
+$real_count = 0;
+$dummy_count = 0;
+
+if (!empty($custom_records_json)) {
+    $decoded = json_decode($custom_records_json, true);
+    if (is_array($decoded) && count($decoded) > 0) {
+        $rows = $decoded;
+        $total = count($rows);
+        $real_count = $total;
+        $dummy_count = 0;
+        $target = $total;
+        $is_custom_dataset = true;
     }
 }
-$real_count = count($db_rows);
 
-// Target sample size (default 500 for official ARTA standard; 0 = Real DB Only)
-$target = isset($_GET['target']) ? (int)$_GET['target'] : 500;
-if ($target < 0) $target = 0;
+if (!$is_custom_dataset) {
+    // Fetch real records for this month from the database (supporting Neon PostgreSQL & MySQL)
+    if ($pdo) {
+        try {
+            $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+            if ($driver === 'pgsql') {
+                $stmt = $pdo->prepare("SELECT * FROM responses WHERE TO_CHAR(survey_date, 'YYYY-MM') = ? ORDER BY survey_date ASC, id ASC");
+            } else {
+                $stmt = $pdo->prepare("SELECT * FROM responses WHERE DATE_FORMAT(survey_date, '%Y-%m') = ? ORDER BY survey_date ASC, id ASC");
+            }
+            $stmt->execute([$month]);
+            $db_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {
+            // Fallback for custom DATE_FORMAT compatibility if defined
+            try {
+                $stmt = $pdo->prepare("SELECT * FROM responses WHERE DATE_FORMAT(survey_date, '%Y-%m') = ? ORDER BY survey_date ASC, id ASC");
+                $stmt->execute([$month]);
+                $db_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            } catch (Throwable $e2) {
+                $db_rows = [];
+            }
+        }
+    }
+    $real_count = count($db_rows);
+}
 
 // ---------- IN-MEMORY SYNTHETIC DATA GENERATOR ----------
 // Generates realistic supplemental responses on-the-fly without inserting anything into Neon
@@ -171,13 +192,15 @@ function generate_synthetic_csm_records($month_str, $needed_count, $start_seq = 
 }
 
 // In-Memory Hybrid merge: Start with real DB records, fill rest with synthetic dummy data
-$rows = $db_rows;
-$dummy_count = 0;
+if (!$is_custom_dataset) {
+    $rows = $db_rows;
+    $dummy_count = 0;
 
-if ($target > $real_count) {
-    $dummy_count = $target - $real_count;
-    $synthetic_rows = generate_synthetic_csm_records($month, $dummy_count, $real_count + 1);
-    $rows = array_merge($rows, $synthetic_rows);
+    if ($target > $real_count) {
+        $dummy_count = $target - $real_count;
+        $synthetic_rows = generate_synthetic_csm_records($month, $dummy_count, $real_count + 1);
+        $rows = array_merge($rows, $synthetic_rows);
+    }
 }
 $total = count($rows);
 
@@ -380,10 +403,15 @@ $h = function($s){ return htmlspecialchars((string)$s); };
 <body>
 
 <div class="toolbar">
-    <a href="dashboard.php?month=<?= $h($month) ?>" style="display:inline-flex;align-items:center;gap:5px;">&larr; Dashboard</a>
-    <form method="GET" id="reportFilterForm" style="margin:0; display:inline-flex; align-items:center; gap:8px;">
+    <a href="admin_bulk.php" style="display:inline-flex;align-items:center;gap:5px;">&larr; Admin Bulk</a>
+    <a href="dashboard.php?month=<?= $h($month) ?>" style="display:inline-flex;align-items:center;gap:5px;">Dashboard</a>
+    <form method="<?= $is_custom_dataset ? 'POST' : 'GET' ?>" id="reportFilterForm" style="margin:0; display:inline-flex; align-items:center; gap:8px;">
+        <?php if ($is_custom_dataset): ?>
+            <input type="hidden" name="custom_records_json" value="<?= $h($custom_records_json) ?>">
+        <?php endif; ?>
         <input type="month" name="month" value="<?= $h($month) ?>" onchange="document.getElementById('reportFilterForm').submit()" style="padding:6px 10px; border-radius:6px; border:0; background:#fff; color:#0f172a; font-weight:bold;">
         
+        <?php if (!$is_custom_dataset): ?>
         <label style="color:#94a3b8; font-size:12px; font-weight:600; margin-left:6px;">Sample Target:</label>
         <select name="target" id="targetSelect" onchange="handleTargetSelection(this.value)" style="padding:6px 10px; border-radius:6px; border:0; background:#1e293b; color:#fff; font-weight:bold;">
             <option value="500" <?= $target == 500 ? 'selected' : '' ?>>500 Responses (ARTA Standard)</option>
@@ -395,10 +423,13 @@ $h = function($s){ return htmlspecialchars((string)$s); };
             <?php endif; ?>
             <option value="custom_prompt">&plus; Custom Target...</option>
         </select>
+        <?php endif; ?>
     </form>
     <button onclick="window.print()">Print / Save as PDF</button>
     <span class="hint">
-        <?php if ($dummy_count > 0): ?>
+        <?php if ($is_custom_dataset): ?>
+            <span style="color:#a78bfa;font-weight:700;">Service Table Quotas:</span> <strong><?= number_format($total) ?></strong> custom responses (100% In-Memory · Zero Neon DB Inserts)
+        <?php elseif ($dummy_count > 0): ?>
             <span style="color:#34d399;font-weight:700;">Combined Report:</span> <strong><?= number_format($total) ?></strong> responses (<strong><?= number_format($real_count) ?></strong> Real + <strong><?= number_format($dummy_count) ?></strong> In-Memory Synthetic · Zero Neon DB Inserts)
         <?php else: ?>
             <span style="color:#93c5fd;font-weight:700;">Real Data Only:</span> <strong><?= number_format($total) ?></strong> responses from Neon DB
