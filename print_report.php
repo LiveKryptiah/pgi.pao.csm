@@ -314,6 +314,26 @@ foreach ($rows as $r) {
     foreach ($sqd_rows as $k => $_) $sqd[$k][norm_sqd($r[$k] ?? '')]++;
 }
 
+// Fetch saved official transaction quotas from database for Page 4 (saved single-cell digits)
+$saved_transactions = [];
+if (!empty($_POST['custom_quotas_json'])) {
+    $decoded_quotas = json_decode($_POST['custom_quotas_json'], true);
+    if (is_array($decoded_quotas)) {
+        foreach ($decoded_quotas as $sid => $cnt) {
+            $saved_transactions[(int)$sid] = (int)$cnt;
+        }
+    }
+}
+if (empty($saved_transactions) && $pdo) {
+    try {
+        $q_stmt = $pdo->prepare("SELECT service_id, total_transactions FROM monthly_service_transactions WHERE target_month = ?");
+        $q_stmt->execute([$month]);
+        while ($qrow = $q_stmt->fetch(PDO::FETCH_ASSOC)) {
+            $saved_transactions[(int)$qrow['service_id']] = (int)$qrow['total_transactions'];
+        }
+    } catch (Throwable $e) {}
+}
+
 $services = [
     1  => 'Pagpasya sa Pagsasagawa ng Tasasyon Mula sa Tanggapan ng Pang-Munisipyong Tagatasa at mga Tasasyong Gawa sa Opisina',
     2  => 'Pagpasya sa Pagsasagawa ng Tasasyon mula sa Tanggapan ng Pang-Munisipyong Tagatasa - Paghati-hati / Pagkonsolida o Kung May Maiiwang Parte sa Ilibipat',
@@ -581,15 +601,21 @@ $h = function($s){ return htmlspecialchars((string)$s); };
 
     <table class="rep svc" id="svcTable">
         <tr style="height:42px;"><th>External Services</th><th style="width:15%;">Responses</th><th style="width:15%;">Total Transactions</th></tr>
+        <?php 
+        $tt_trans = [];
+        foreach ($services as $i => $name) {
+            $tt_trans[$i] = isset($saved_transactions[$i]) && $saved_transactions[$i] > 0 ? (int)$saved_transactions[$i] : (int)$trans[$i];
+        }
+        ?>
         <?php foreach ($services as $i => $name): ?>
         <tr>
             <td class="svc-name"><?= $i ?>.&nbsp; <?= $h($name) ?></td>
             <td class="num"><?= $trans[$i] ?></td>
-            <td class="num tt" contenteditable="true"><?= $trans[$i] ?></td>
+            <td class="num tt" contenteditable="true"><?= $tt_trans[$i] ?></td>
         </tr>
         <?php endforeach; ?>
-        <tr class="total"><td style="font-family:Arial;">EXTERNAL SERVICE TOTAL</td><td class="c"><?= array_sum($trans) ?></td><td class="c" id="tt1"><?= array_sum($trans) ?></td></tr>
-        <tr class="total"><td style="font-family:Arial;">OVERALL TOTAL</td><td class="c"><?= array_sum($trans) ?></td><td class="c" id="tt2"><?= array_sum($trans) ?></td></tr>
+        <tr class="total"><td style="font-family:Arial;">EXTERNAL SERVICE TOTAL</td><td class="c"><?= array_sum($trans) ?></td><td class="c" id="tt1"><?= array_sum($tt_trans) ?></td></tr>
+        <tr class="total"><td style="font-family:Arial;">OVERALL TOTAL</td><td class="c"><?= array_sum($trans) ?></td><td class="c" id="tt2"><?= array_sum($tt_trans) ?></td></tr>
     </table>
 
     <div class="signatories">

@@ -556,6 +556,36 @@ if (isset($_GET['action']) && in_array($_GET['action'], ['get_csm_export', 'down
     }
 }
 
+// Helper to ensure monthly_service_transactions table exists for storing single-digit quota numbers
+function ensure_monthly_transactions_table($pdo) {
+    if (!$pdo) return;
+    static $ensured = false;
+    if ($ensured) return;
+    try {
+        $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS monthly_service_transactions (
+                target_month VARCHAR(7) NOT NULL,
+                service_id INT NOT NULL,
+                service_name VARCHAR(100) NOT NULL,
+                total_transactions INT NOT NULL DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (target_month, service_id)
+            )");
+        } else {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS monthly_service_transactions (
+                target_month VARCHAR(7) NOT NULL,
+                service_id INT NOT NULL,
+                service_name VARCHAR(100) NOT NULL,
+                total_transactions INT NOT NULL DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (target_month, service_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        }
+        $ensured = true;
+    } catch (Throwable $e) {}
+}
+
 // 2. HANDLE DELETE ALL BULK DATA
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_bulk_data'])) {
     try {
@@ -583,29 +613,117 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['wipe_month_data'])) {
     } else {
         try {
             $month_label = date('F Y', strtotime($wipe_month . '-01'));
-            if ($wipe_scope === 'all') {
-                $stmt = $pdo->prepare("DELETE FROM responses WHERE DATE_FORMAT(survey_date, '%Y-%m') = :month");
-                $stmt->execute([':month' => $wipe_month]);
-                $deleted_count = $stmt->rowCount();
-                if ($deleted_count > 0) {
-                    $success_msg = "Success! Permanently deleted all " . number_format($deleted_count) . " records for " . $month_label . ".";
+            $driver = $pdo ? $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) : '';
+            if ($driver === 'pgsql') {
+                if ($wipe_scope === 'all') {
+                    $stmt = $pdo->prepare("DELETE FROM responses WHERE TO_CHAR(survey_date, 'YYYY-MM') = :month");
                 } else {
-                    $error_msg = "No records found for " . $month_label . " to delete.";
+                    $stmt = $pdo->prepare("DELETE FROM responses WHERE TO_CHAR(survey_date, 'YYYY-MM') = :month AND (control_number LIKE '%B' OR control_number LIKE 'BLK-%')");
                 }
             } else {
-                $stmt = $pdo->prepare("DELETE FROM responses WHERE DATE_FORMAT(survey_date, '%Y-%m') = :month AND (control_number LIKE '%B' OR control_number LIKE 'BLK-%')");
-                $stmt->execute([':month' => $wipe_month]);
-                $deleted_count = $stmt->rowCount();
-                if ($deleted_count > 0) {
-                    $success_msg = "Success! Permanently deleted " . number_format($deleted_count) . " bulk records for " . $month_label . ".";
+                if ($wipe_scope === 'all') {
+                    $stmt = $pdo->prepare("DELETE FROM responses WHERE DATE_FORMAT(survey_date, '%Y-%m') = :month");
                 } else {
-                    $error_msg = "No bulk-generated records found for " . $month_label . " to delete.";
+                    $stmt = $pdo->prepare("DELETE FROM responses WHERE DATE_FORMAT(survey_date, '%Y-%m') = :month AND (control_number LIKE '%B' OR control_number LIKE 'BLK-%')");
                 }
+            }
+            $stmt->execute([':month' => $wipe_month]);
+            $deleted_count = $stmt->rowCount();
+            if ($deleted_count > 0) {
+                $scope_text = ($wipe_scope === 'all') ? "all" : "bulk";
+                $success_msg = "Success! Permanently deleted " . number_format($deleted_count) . " {$scope_text} records for " . $month_label . ".";
+            } else {
+                $error_msg = "No records found for " . $month_label . " to delete.";
             }
         } catch (Exception $e) {
             $error_msg = "Database Deletion Error: " . $e->getMessage();
         }
     }
+}
+
+// 2c. HANDLE SAVING OFFICIAL SERVICE QUOTAS (SAVED AS SINGLE DATA CELL DIGITS IN DATABASE)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_monthly_quotas'])) {
+    $target_month = trim($_POST['quota_target_month'] ?? '');
+    if (!preg_match('/^\d{4}-\d{2}$/', $target_month)) {
+        $error_msg = "Please specify a valid month format (YYYY-MM).";
+    } else {
+        ensure_monthly_transactions_table($pdo);
+        if ($pdo) {
+            try {
+                $quotas = $_POST['quotas'] ?? [];
+                $month_label = date('F Y', strtotime($target_month . '-01'));
+                $total_sum = 0;
+
+                foreach ($servicesMeta as $svc_id => $s_meta) {
+                    $val = isset($quotas[$svc_id]) ? (int)$quotas[$svc_id] : 0;
+                    if ($val < 0) $val = 0;
+                    $total_sum += $val;
+                    $svc_name = $s_meta['name'] ?? ('Service ' . $svc_id);
+
+                    $chk = $pdo->prepare("SELECT COUNT(*) FROM monthly_service_transactions WHERE target_month = ? AND service_id = ?");
+                    $chk->execute([$target_month, $svc_id]);
+                    if ($chk->fetchColumn() > 0) {
+                        $upd = $pdo->prepare("UPDATE monthly_service_transactions SET total_transactions = ?, service_name = ?, updated_at = CURRENT_TIMESTAMP WHERE target_month = ? AND service_id = ?");
+                        $upd->execute([$val, $svc_name, $target_month, $svc_id]);
+                    } else {
+                        $ins = $pdo->prepare("INSERT INTO monthly_service_transactions (target_month, service_id, service_name, total_transactions, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)");
+                        $ins->execute([$target_month, $svc_id, $svc_name, $val]);
+                    }
+                }
+                $success_msg = "Success! Saved official transaction quotas for " . $month_label . " to database as general digits (Total: " . number_format($total_sum) . " transactions; zero dummy metadata rows created).";
+                $active_rep_month = $target_month;
+            } catch (Throwable $e) {
+                $error_msg = "Failed to save monthly transaction quotas: " . $e->getMessage();
+            }
+        } else {
+            $error_msg = "Database connection unavailable.";
+        }
+    }
+}
+
+// 2d. AJAX HANDLER FOR SAVING SERVICE QUOTAS AS DIGITS
+if (isset($_GET['action']) && $_GET['action'] === 'save_monthly_quotas_ajax' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json');
+    $target_month = trim($_POST['target_month'] ?? '');
+    if (!preg_match('/^\d{4}-\d{2}$/', $target_month)) {
+        echo json_encode(['status' => 'error', 'message' => 'Invalid month format (YYYY-MM).']);
+        exit;
+    }
+    ensure_monthly_transactions_table($pdo);
+    if (!$pdo) {
+        echo json_encode(['status' => 'error', 'message' => 'Database connection unavailable.']);
+        exit;
+    }
+    try {
+        $quotas = $_POST['quotas'] ?? [];
+        $total_sum = 0;
+        foreach ($servicesMeta as $svc_id => $s_meta) {
+            $val = isset($quotas[$svc_id]) ? (int)$quotas[$svc_id] : 0;
+            if ($val < 0) $val = 0;
+            $total_sum += $val;
+            $svc_name = $s_meta['name'] ?? ('Service ' . $svc_id);
+
+            $chk = $pdo->prepare("SELECT COUNT(*) FROM monthly_service_transactions WHERE target_month = ? AND service_id = ?");
+            $chk->execute([$target_month, $svc_id]);
+            if ($chk->fetchColumn() > 0) {
+                $upd = $pdo->prepare("UPDATE monthly_service_transactions SET total_transactions = ?, service_name = ?, updated_at = CURRENT_TIMESTAMP WHERE target_month = ? AND service_id = ?");
+                $upd->execute([$val, $svc_name, $target_month, $svc_id]);
+            } else {
+                $ins = $pdo->prepare("INSERT INTO monthly_service_transactions (target_month, service_id, service_name, total_transactions, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)");
+                $ins->execute([$target_month, $svc_id, $svc_name, $val]);
+            }
+        }
+        $month_label = date('F Y', strtotime($target_month . '-01'));
+        echo json_encode([
+            'status' => 'success',
+            'message' => "Saved official quotas for {$month_label} to database as digits (Total: " . number_format($total_sum) . ").",
+            'total_sum' => $total_sum,
+            'target_month' => $target_month
+        ]);
+    } catch (Throwable $e) {
+        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    }
+    exit;
 }
 
 // 3. HANDLE BULK SUBMISSION (Single JSON payload bypasses PHP max_input_vars limit entirely)
@@ -789,6 +907,17 @@ if ($pdo) {
             if ($t >= 1 && $t <= 13) {
                 $db_service_counts[$t]++;
             }
+        }
+    } catch (Throwable $e) {}
+
+    // Query saved official total transactions digits for this month from monthly_service_transactions
+    $db_saved_quotas = [];
+    ensure_monthly_transactions_table($pdo);
+    try {
+        $q_stmt = $pdo->prepare("SELECT service_id, total_transactions FROM monthly_service_transactions WHERE target_month = ?");
+        $q_stmt->execute([$active_rep_month]);
+        while ($qrow = $q_stmt->fetch(PDO::FETCH_ASSOC)) {
+            $db_saved_quotas[(int)$qrow['service_id']] = (int)$qrow['total_transactions'];
         }
     } catch (Throwable $e) {}
 }
@@ -1583,13 +1712,19 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                                 <span>Generate &amp; Copy for Excel</span>
                             </button>
 
-                            <!-- Action 2: Print Official CSM Report -->
+                            <!-- Action 2: Save Quotas as Digits in Database -->
+                            <button type="button" class="btn btn-outline-primary fw-bold py-2 px-3 rounded-3 d-inline-flex align-items-center gap-2 shadow-xs" id="svcSaveDigitsBtn" onclick="saveServiceTableQuotasAsDigits(this)" title="Save entered quotas as single numeric digits in database (zero fake metadata rows)">
+                                <i class="ph-bold ph-floppy-disk fs-5"></i>
+                                <span>Save Quotas as Digits (DB)</span>
+                            </button>
+
+                            <!-- Action 3: Print Official CSM Report -->
                             <button type="button" class="btn btn-primary fw-bold py-2 px-3 rounded-3 shadow-sm d-inline-flex align-items-center gap-2" id="svcPrintReportBtn" onclick="printServiceTableReport(this)" title="Open official 4-page ARTA CSM Report with exact tallies in new window">
                                 <i class="ph-bold ph-printer fs-5"></i>
                                 <span>Print Official CSM Report</span>
                             </button>
 
-                            <!-- Action 3: Save to Database (shown when toggle is ON) -->
+                            <!-- Action 4: Save to Database (shown when toggle is ON) -->
                             <button type="button" class="btn btn-warning fw-bold py-2 px-3 rounded-3 d-none align-items-center gap-2 shadow-sm" id="svcSaveDbBtn" onclick="saveServiceTableToDatabase(this)">
                                 <i class="ph-bold ph-cloud-arrow-up fs-5"></i>
                                 <span>Save to Neon Database</span>
@@ -1805,95 +1940,128 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                 </div>
             </div>
 
-            <!-- Official 13-Service Breakdown Table -->
-            <div class="summary-table-container border rounded-3 overflow-hidden shadow-xs mb-3">
-                <table class="table table-hover align-middle mb-0" id="overallResponsesSvcTable">
-                    <thead class="table-light border-bottom">
-                        <tr>
-                            <th style="width: 50px;" class="text-center">#</th>
-                            <th>External Services (PAO Isabela)</th>
-                            <th style="width: 170px;" class="text-center">Survey Responses</th>
-                            <th style="width: 180px;" class="text-center">Total Transactions</th>
-                            <th style="width: 110px;" class="text-center">% Share</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php 
-                            $sum_resp = array_sum($db_service_counts);
-                            foreach ($servicesMeta as $idx => $s): 
-                                $rCount = $db_service_counts[$idx] ?? 0;
-                                $sharePct = $sum_resp > 0 ? number_format(($rCount / $sum_resp) * 100, 1) : '0.0';
-                        ?>
+            <!-- Official 13-Service Breakdown Table Form -->
+            <form method="POST" action="admin_bulk.php#overallResponsesCard" id="overallQuotasForm">
+                <input type="hidden" name="save_monthly_quotas" value="1">
+                <input type="hidden" name="quota_target_month" value="<?= htmlspecialchars($active_rep_month) ?>">
+
+                <div class="summary-table-container border rounded-3 overflow-hidden shadow-xs mb-3">
+                    <table class="table table-hover align-middle mb-0" id="overallResponsesSvcTable">
+                        <thead class="table-light border-bottom">
                             <tr>
-                                <td class="text-center">
-                                    <span class="badge bg-light text-primary border fw-bold px-2 py-1 rounded-2">
-                                        #<?= $idx ?>
-                                    </span>
+                                <th style="width: 50px;" class="text-center">#</th>
+                                <th>External Services (PAO Isabela)</th>
+                                <th style="width: 170px;" class="text-center">Survey Responses</th>
+                                <th style="width: 200px;" class="text-center">Total Transactions (Quotas)</th>
+                                <th style="width: 110px;" class="text-center">% Share</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php 
+                                $sum_resp = array_sum($db_service_counts);
+                                $sum_tt = 0;
+                                foreach ($servicesMeta as $idx => $s): 
+                                    $rCount = $db_service_counts[$idx] ?? 0;
+                                    $hasSavedDigit = isset($db_saved_quotas[$idx]);
+                                    $savedTt = $hasSavedDigit ? (int)$db_saved_quotas[$idx] : $rCount;
+                                    $sum_tt += $savedTt;
+                                    $sharePct = $sum_resp > 0 ? number_format(($rCount / $sum_resp) * 100, 1) : '0.0';
+                            ?>
+                                <tr>
+                                    <td class="text-center">
+                                        <span class="badge bg-light text-primary border fw-bold px-2 py-1 rounded-2">
+                                            #<?= $idx ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold text-dark" style="font-size: 0.88rem;">
+                                            <?= htmlspecialchars($s['title']) ?>
+                                        </div>
+                                        <div class="text-muted" style="font-size: 0.74rem;">
+                                            <?= htmlspecialchars($s['desc']) ?>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="fw-bold text-dark fs-6 card-resp-val" id="cardResp_<?= $idx ?>">
+                                            <?= number_format($rCount) ?>
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="d-inline-flex align-items-center justify-content-center gap-1.5">
+                                            <input type="number" min="0" max="999999" 
+                                                   name="quotas[<?= $idx ?>]" 
+                                                   class="form-control form-control-sm text-center fw-bold overall-tt-input" 
+                                                   id="cardTt_<?= $idx ?>" 
+                                                   data-idx="<?= $idx ?>" 
+                                                   value="<?= $savedTt ?>" 
+                                                   style="width: 120px; font-size: 0.88rem;" 
+                                                   oninput="recalcCardOverallTotal()">
+                                            <?php if ($hasSavedDigit): ?>
+                                                <span class="badge bg-success-subtle text-success border border-success-subtle py-1" style="font-size: 0.65rem;" title="Official quota saved in database as single digit cell">DB</span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-light text-secondary border small card-share-val" id="cardShare_<?= $idx ?>">
+                                            <?= $sharePct ?>%
+                                        </span>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                        <tfoot class="border-top">
+                            <tr class="table-light fw-bold" style="border-top: 2px solid var(--border-subtle);">
+                                <td colspan="2" class="ps-3 text-uppercase tracking-wider small fw-bold">
+                                    EXTERNAL SERVICE TOTAL
                                 </td>
-                                <td>
-                                    <div class="fw-bold text-dark" style="font-size: 0.88rem;">
-                                        <?= htmlspecialchars($s['title']) ?>
-                                    </div>
-                                    <div class="text-muted" style="font-size: 0.74rem;">
-                                        <?= htmlspecialchars($s['desc']) ?>
-                                    </div>
+                                <td class="text-center fs-6 text-primary fw-bold" id="cardExternalTotalResp">
+                                    <?= number_format($sum_resp) ?>
                                 </td>
-                                <td class="text-center">
-                                    <span class="fw-bold text-dark fs-6 card-resp-val" id="cardResp_<?= $idx ?>">
-                                        <?= number_format($rCount) ?>
-                                    </span>
+                                <td class="text-center fs-6 text-success fw-bold" id="cardExternalTotalTt">
+                                    <?= number_format($sum_tt) ?>
                                 </td>
-                                <td class="text-center">
-                                    <div class="d-inline-flex align-items-center justify-content-center">
-                                        <input type="number" min="0" max="99999" 
-                                               class="form-control form-control-sm text-center fw-bold overall-tt-input" 
-                                               id="cardTt_<?= $idx ?>" 
-                                               data-idx="<?= $idx ?>" 
-                                               value="<?= $rCount ?>" 
-                                               style="width: 120px; font-size: 0.88rem;" 
-                                               oninput="recalcCardOverallTotal()">
-                                    </div>
-                                </td>
-                                <td class="text-center">
-                                    <span class="badge bg-light text-secondary border small card-share-val" id="cardShare_<?= $idx ?>">
-                                        <?= $sharePct ?>%
-                                    </span>
+                                <td class="text-center text-muted small">
+                                    100.0%
                                 </td>
                             </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                    <tfoot class="border-top">
-                        <tr class="table-light fw-bold" style="border-top: 2px solid var(--border-subtle);">
-                            <td colspan="2" class="ps-3 text-uppercase tracking-wider small fw-bold">
-                                EXTERNAL SERVICE TOTAL
-                            </td>
-                            <td class="text-center fs-6 text-primary fw-bold" id="cardExternalTotalResp">
-                                <?= number_format($sum_resp) ?>
-                            </td>
-                            <td class="text-center fs-6 text-success fw-bold" id="cardExternalTotalTt">
-                                <?= number_format($sum_resp) ?>
-                            </td>
-                            <td class="text-center text-muted small">
-                                100.0%
-                            </td>
-                        </tr>
-                        <tr class="fw-bold bg-dark text-white">
-                            <td colspan="2" class="ps-3 text-uppercase tracking-wider small fw-bold text-white">
-                                OVERALL TOTAL
-                            </td>
-                            <td class="text-center fs-6 text-white fw-bold" id="cardOverallFinalResp">
-                                <?= number_format($sum_resp) ?>
-                            </td>
-                            <td class="text-center fs-6 text-warning fw-bold" id="cardOverallFinalTt">
-                                <?= number_format($sum_resp) ?>
-                            </td>
-                            <td class="text-center text-white small">
-                                100.0%
-                            </td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
+                            <tr class="fw-bold bg-dark text-white">
+                                <td colspan="2" class="ps-3 text-uppercase tracking-wider small fw-bold text-white">
+                                    OVERALL TOTAL
+                                </td>
+                                <td class="text-center fs-6 text-white fw-bold" id="cardOverallFinalResp">
+                                    <?= number_format($sum_resp) ?>
+                                </td>
+                                <td class="text-center fs-6 text-warning fw-bold" id="cardOverallFinalTt">
+                                    <?= number_format($sum_tt) ?>
+                                </td>
+                                <td class="text-center text-white small">
+                                    100.0%
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <!-- Action Bar for Saving Quotas as Digits -->
+                <div class="d-flex align-items-center justify-content-between p-3 bg-light border rounded-3 mb-3 flex-wrap gap-3">
+                    <div class="d-flex align-items-center gap-2 small text-muted">
+                        <i class="ph-bold ph-database text-primary fs-5"></i>
+                        <span>Quotas are stored in the database as <strong>single-cell digits</strong> per service for <strong><?= htmlspecialchars($active_month_label) ?></strong> (no dummy survey rows in <code>responses</code>).</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 ms-auto flex-wrap">
+                        <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold py-1.5 px-3 rounded-3 d-inline-flex align-items-center gap-1.5" onclick="copyServiceQuotasFromTop()" title="Load values entered in the top generator panel into this table">
+                            <i class="ph-bold ph-arrow-down"></i> Pull Top Quotas
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary fw-semibold py-1.5 px-3 rounded-3 d-inline-flex align-items-center gap-1.5" onclick="saveQuotasAjax(this)" title="Save via AJAX without page reload">
+                            <i class="ph-bold ph-lightning"></i> Quick Save (AJAX)
+                        </button>
+                        <button type="submit" class="btn btn-sm btn-primary fw-bold py-1.5 px-3 rounded-3 shadow-sm d-inline-flex align-items-center gap-1.5" id="saveQuotasDbBtn">
+                            <i class="ph-bold ph-floppy-disk"></i>
+                            <span>Save Quotas to Database</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
 
             <!-- Collapsible: View All Monthly Records Archive & History -->
             <div class="pt-2 border-top">
@@ -3036,11 +3204,13 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
 
         // Collect quotas
         const quotas = [];
+        const quotasMap = {};
         let totalCount = 0;
         $('.svc-quota-input').each(function() {
             const idx = parseInt($(this).data('service-idx'), 10);
             const name = $(this).data('service-name');
             const count = parseInt($(this).val(), 10) || 0;
+            quotasMap[idx] = count;
             if (count > 0) {
                 quotas.push({ idx, name, count });
                 totalCount += count;
@@ -3123,7 +3293,8 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
         return {
             monthVal,
             records,
-            totalCount: records.length
+            totalCount: records.length,
+            quotasMap
         };
     }
 
@@ -3196,6 +3367,12 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
         jsonInput.value = JSON.stringify(records);
         form.appendChild(jsonInput);
 
+        const quotasInput = document.createElement('input');
+        quotasInput.type = 'hidden';
+        quotasInput.name = 'custom_quotas_json';
+        quotasInput.value = JSON.stringify(genData.quotasMap || {});
+        form.appendChild(quotasInput);
+
         document.body.appendChild(form);
         form.submit();
         setTimeout(() => form.remove(), 1000);
@@ -3218,6 +3395,130 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
         $('#bulkJsonInput').val(JSON.stringify(records));
         $('#saveToDbToggle').prop('checked', true);
         HTMLFormElement.prototype.submit.call(document.getElementById('generatorForm'));
+    }
+
+    // Save Top Service Table Quotas directly as single digits in database
+    async function saveServiceTableQuotasAsDigits(btn) {
+        const monthVal = $('#svcTableMonth').val();
+        if (!monthVal) {
+            alert('Please select a Target Month first.');
+            return;
+        }
+
+        const quotas = {};
+        let totalCount = 0;
+        $('.svc-quota-input').each(function() {
+            const idx = $(this).data('service-idx');
+            const count = parseInt($(this).val(), 10) || 0;
+            quotas[idx] = count;
+            totalCount += count;
+        });
+
+        if (totalCount === 0) {
+            alert('Please enter at least one service quota count greater than 0.');
+            return;
+        }
+
+        const originalHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="ph-bold ph-spinner-gap spin fs-5"></i> <span>Saving ${totalCount.toLocaleString()} as Digits...</span>`;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('target_month', monthVal);
+            for (const [k, v] of Object.entries(quotas)) {
+                formData.append(`quotas[${k}]`, v);
+            }
+
+            const res = await fetch('admin_bulk.php?action=save_monthly_quotas_ajax', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                showCopyToast(
+                    `Saved Quotas to Database (${monthVal})!`,
+                    `Stored ${totalCount.toLocaleString()} total transactions as single-cell digits in database (zero dummy survey metadata).`
+                );
+                // Sync with overall responses table below
+                for (let i = 1; i <= 13; i++) {
+                    $(`#cardTt_${i}`).val(quotas[i] || 0);
+                }
+                recalcCardOverallTotal();
+            } else {
+                alert('Error saving quotas: ' + (data.message || 'Unknown error'));
+            }
+        } catch (err) {
+            alert('Network/server error while saving quotas: ' + err.message);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
+    }
+
+    // Pull Quotas from Top Panel into Overall Responses Table
+    function copyServiceQuotasFromTop() {
+        let pulledCount = 0;
+        for (let i = 1; i <= 13; i++) {
+            const val = parseInt($(`#svcQuota_${i}`).val(), 10) || 0;
+            $(`#cardTt_${i}`).val(val);
+            pulledCount += val;
+        }
+        recalcCardOverallTotal();
+        showCopyToast('Pulled from Top Quotas!', `Loaded ${pulledCount.toLocaleString()} total transactions into the table. Click "Save Quotas to Database" to commit.`);
+    }
+
+    // Save Overall Responses Table Quotas via AJAX
+    async function saveQuotasAjax(btn) {
+        const originalHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="ph-bold ph-spinner-gap spin fs-6"></i> <span>Saving...</span>`;
+        }
+
+        const targetMonth = $('input[name="quota_target_month"]').val();
+        const quotas = {};
+        let totalSum = 0;
+        $('.overall-tt-input').each(function() {
+            const idx = $(this).data('idx');
+            const val = parseInt($(this).val(), 10) || 0;
+            quotas[idx] = val;
+            totalSum += val;
+        });
+
+        try {
+            const formData = new FormData();
+            formData.append('target_month', targetMonth);
+            for (const [k, v] of Object.entries(quotas)) {
+                formData.append(`quotas[${k}]`, v);
+            }
+
+            const res = await fetch('admin_bulk.php?action=save_monthly_quotas_ajax', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                showCopyToast(
+                    `Saved Quotas for ${targetMonth}!`,
+                    `Stored ${totalSum.toLocaleString()} total transactions as digits in database table (single data cells; zero dummy rows).`
+                );
+                recalcCardOverallTotal();
+            } else {
+                alert('Error saving quotas: ' + (data.message || 'Unknown error'));
+            }
+        } catch (err) {
+            alert('Network/Server error: ' + err.message);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
     }
 
     // Initialize Service Table live counter and Overall Responses table on page load
