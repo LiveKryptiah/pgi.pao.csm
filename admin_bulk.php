@@ -641,6 +641,99 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['wipe_month_data'])) {
     }
 }
 
+// Helper to save or distribute a single month total quota into monthly_service_transactions
+function save_month_total_quota($pdo, $servicesMeta, $target_month, $total_val) {
+    ensure_monthly_transactions_table($pdo);
+    if (!$pdo || !preg_match('/^\d{4}-\d{2}$/', $target_month)) return false;
+    $total_val = max(0, (int)$total_val);
+
+    // 1. Check existing service quota distribution in monthly_service_transactions
+    $chk_stmt = $pdo->prepare("SELECT service_id, total_transactions FROM monthly_service_transactions WHERE target_month = ?");
+    $chk_stmt->execute([$target_month]);
+    $existing = [];
+    while ($r = $chk_stmt->fetch(PDO::FETCH_ASSOC)) {
+        $existing[(int)$r['service_id']] = (int)$r['total_transactions'];
+    }
+    $existing_sum = array_sum($existing);
+
+    // 2. Query survey response counts for this month
+    $resp_counts = array_fill(1, 13, 0);
+    try {
+        $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $s_stmt = $pdo->prepare("SELECT transaction_type FROM responses WHERE TO_CHAR(survey_date, 'YYYY-MM') = ?");
+        } else {
+            $s_stmt = $pdo->prepare("SELECT transaction_type FROM responses WHERE DATE_FORMAT(survey_date, '%Y-%m') = ?");
+        }
+        $s_stmt->execute([$target_month]);
+        while ($ar = $s_stmt->fetch(PDO::FETCH_ASSOC)) {
+            $t = norm_trans_php($ar['transaction_type'] ?? '');
+            if ($t >= 1 && $t <= 13) $resp_counts[$t]++;
+        }
+    } catch (Throwable $e) {}
+    $resp_sum = array_sum($resp_counts);
+
+    // 3. Determine distribution across the 13 PAO services
+    $distribution = array_fill(1, 13, 0);
+    if ($total_val === 0) {
+        // all zero
+    } elseif ($existing_sum > 0) {
+        // Scale existing distribution
+        $running = 0;
+        $max_id = 1;
+        $max_val = -1;
+        foreach ($existing as $sid => $v) {
+            if ($sid < 1 || $sid > 13) continue;
+            $scaled = (int)round(($v / $existing_sum) * $total_val);
+            $distribution[$sid] = $scaled;
+            $running += $scaled;
+            if ($v > $max_val) {
+                $max_val = $v;
+                $max_id = $sid;
+            }
+        }
+        $diff = $total_val - $running;
+        $distribution[$max_id] = max(0, $distribution[$max_id] + $diff);
+    } elseif ($resp_sum > 0) {
+        // Distribute proportionally to responses
+        $running = 0;
+        $max_id = 1;
+        $max_r = -1;
+        foreach ($resp_counts as $sid => $r) {
+            if ($r <= 0) continue;
+            $alloc = (int)round(($r / $resp_sum) * $total_val);
+            $distribution[$sid] = $alloc;
+            $running += $alloc;
+            if ($r > $max_r) {
+                $max_r = $r;
+                $max_id = $sid;
+            }
+        }
+        $diff = $total_val - $running;
+        $distribution[$max_id] = max(0, $distribution[$max_id] + $diff);
+    } else {
+        // Default to Service 1 (General Tasasyon)
+        $distribution[1] = $total_val;
+    }
+
+    // 4. Save records into monthly_service_transactions
+    foreach ($servicesMeta as $sid => $sm) {
+        $val = $distribution[$sid] ?? 0;
+        $svc_name = $sm['name'] ?? ('Service ' . $sid);
+
+        $chk = $pdo->prepare("SELECT COUNT(*) FROM monthly_service_transactions WHERE target_month = ? AND service_id = ?");
+        $chk->execute([$target_month, $sid]);
+        if ($chk->fetchColumn() > 0) {
+            $upd = $pdo->prepare("UPDATE monthly_service_transactions SET total_transactions = ?, service_name = ?, updated_at = CURRENT_TIMESTAMP WHERE target_month = ? AND service_id = ?");
+            $upd->execute([$val, $svc_name, $target_month, $sid]);
+        } else {
+            $ins = $pdo->prepare("INSERT INTO monthly_service_transactions (target_month, service_id, service_name, total_transactions, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)");
+            $ins->execute([$target_month, $sid, $svc_name, $val]);
+        }
+    }
+    return true;
+}
+
 // 2c. HANDLE SAVING OFFICIAL SERVICE QUOTAS (SAVED AS SINGLE DATA CELL DIGITS IN DATABASE)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_monthly_quotas'])) {
     $target_month = trim($_POST['quota_target_month'] ?? '');
@@ -681,7 +774,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_monthly_quotas']
     }
 }
 
-// 2d. AJAX HANDLER FOR SAVING SERVICE QUOTAS AS DIGITS
+// 2d. HANDLE SAVING ALL MONTH TRANSACTION TOTALS
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_all_month_totals'])) {
+    ensure_monthly_transactions_table($pdo);
+    $month_totals = $_POST['month_totals'] ?? [];
+    $saved_count = 0;
+    if ($pdo && is_array($month_totals)) {
+        try {
+            foreach ($month_totals as $ym => $val) {
+                if (preg_match('/^\d{4}-\d{2}$/', $ym)) {
+                    save_month_total_quota($pdo, $servicesMeta, $ym, (int)$val);
+                    $saved_count++;
+                }
+            }
+            $success_msg = "Success! Saved total transaction quotas for all " . $saved_count . " months to database as digits.";
+        } catch (Throwable $e) {
+            $error_msg = "Failed to save month transaction totals: " . $e->getMessage();
+        }
+    }
+}
+
+// 2e. AJAX HANDLER FOR SAVING SERVICE QUOTAS AS DIGITS
 if (isset($_GET['action']) && $_GET['action'] === 'save_monthly_quotas_ajax' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Content-Type: application/json');
     $target_month = trim($_POST['target_month'] ?? '');
@@ -723,6 +836,113 @@ if (isset($_GET['action']) && $_GET['action'] === 'save_monthly_quotas_ajax' && 
     } catch (Throwable $e) {
         echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
     }
+    exit;
+}
+
+// 2f. AJAX HANDLER FOR SAVING SINGLE MONTH TOTAL AS DIGIT
+if (isset($_GET['action']) && $_GET['action'] === 'save_single_month_total_ajax' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json');
+    $target_month = trim($_POST['target_month'] ?? '');
+    $total_val = (int)($_POST['total_transactions'] ?? 0);
+    if (!preg_match('/^\d{4}-\d{2}$/', $target_month)) {
+        echo json_encode(['status' => 'error', 'message' => 'Invalid month format (YYYY-MM).']);
+        exit;
+    }
+    ensure_monthly_transactions_table($pdo);
+    if (!$pdo) {
+        echo json_encode(['status' => 'error', 'message' => 'Database connection unavailable.']);
+        exit;
+    }
+    try {
+        save_month_total_quota($pdo, $servicesMeta, $target_month, $total_val);
+        $month_label = date('F Y', strtotime($target_month . '-01'));
+        echo json_encode([
+            'status' => 'success',
+            'message' => "Saved total transactions for {$month_label} as " . number_format($total_val) . " total.",
+            'target_month' => $target_month,
+            'total_transactions' => $total_val
+        ]);
+    } catch (Throwable $e) {
+        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    }
+    exit;
+}
+
+// 2g. AJAX HANDLER FOR FETCHING 13 SERVICES BREAKDOWN FOR A MONTH
+if (isset($_GET['action']) && $_GET['action'] === 'get_month_breakdown_ajax') {
+    header('Content-Type: application/json');
+    $month = trim($_GET['month'] ?? '');
+    if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+        echo json_encode(['status' => 'error', 'message' => 'Invalid month format.']);
+        exit;
+    }
+    $svc_counts = array_fill(1, 13, 0);
+    $saved_quotas = [];
+    $total_resp = 0;
+    $total_real = 0;
+    $total_bulk = 0;
+
+    if ($pdo) {
+        try {
+            $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+            if ($driver === 'pgsql') {
+                $stmt = $pdo->prepare("SELECT transaction_type, control_number FROM responses WHERE TO_CHAR(survey_date, 'YYYY-MM') = ?");
+            } else {
+                $stmt = $pdo->prepare("SELECT transaction_type, control_number FROM responses WHERE DATE_FORMAT(survey_date, '%Y-%m') = ?");
+            }
+            $stmt->execute([$month]);
+            while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $total_resp++;
+                $ctrl = $r['control_number'] ?? '';
+                if (substr($ctrl, -1) === 'B' || strpos($ctrl, 'BLK-') === 0) {
+                    $total_bulk++;
+                } else {
+                    $total_real++;
+                }
+                $t = norm_trans_php($r['transaction_type'] ?? '');
+                if ($t >= 1 && $t <= 13) {
+                    $svc_counts[$t]++;
+                }
+            }
+        } catch (Throwable $e) {}
+
+        try {
+            ensure_monthly_transactions_table($pdo);
+            $q_stmt = $pdo->prepare("SELECT service_id, total_transactions FROM monthly_service_transactions WHERE target_month = ?");
+            $q_stmt->execute([$month]);
+            while ($qrow = $q_stmt->fetch(PDO::FETCH_ASSOC)) {
+                $saved_quotas[(int)$qrow['service_id']] = (int)$qrow['total_transactions'];
+            }
+        } catch (Throwable $e) {}
+    }
+
+    $services_list = [];
+    $sum_tt = 0;
+    foreach ($servicesMeta as $sid => $sm) {
+        $rCount = $svc_counts[$sid] ?? 0;
+        $hasSaved = isset($saved_quotas[$sid]);
+        $tt = $hasSaved ? (int)$saved_quotas[$sid] : $rCount;
+        $sum_tt += $tt;
+        $services_list[] = [
+            'id' => $sid,
+            'title' => $sm['title'],
+            'desc' => $sm['desc'],
+            'responses' => $rCount,
+            'total_transactions' => $tt,
+            'has_saved' => $hasSaved
+        ];
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'month' => $month,
+        'month_label' => date('F Y', strtotime($month . '-01')),
+        'total_responses' => $total_resp,
+        'total_real' => $total_real,
+        'total_bulk' => $total_bulk,
+        'total_transactions' => $sum_tt,
+        'services' => $services_list
+    ]);
     exit;
 }
 
@@ -860,13 +1080,15 @@ function norm_trans_php($v) {
     return 7;
 }
 
-// 4. RETRIEVE MONTH TALLIES & ACTIVE SERVICE BREAKDOWN (Neon PostgreSQL & MySQL compatible)
+// 4. RETRIEVE MONTH TALLIES, ANNUAL CALENDAR & SERVICE BREAKDOWNS (PostgreSQL & MySQL compatible)
 $month_tallies = [];
 $active_rep_month = $_GET['report_month'] ?? '';
 $db_service_counts = array_fill(1, 13, 0);
 $db_active_total = 0;
 $db_active_real = 0;
 $db_active_bulk = 0;
+$monthly_quota_totals = [];
+$monthly_service_breakdowns = [];
 
 if ($pdo) {
     try {
@@ -880,6 +1102,19 @@ if ($pdo) {
     } catch (Throwable $e) {
         $month_tallies = [];
     }
+
+    // Retrieve all saved monthly transaction totals from monthly_service_transactions
+    ensure_monthly_transactions_table($pdo);
+    try {
+        $mq_stmt = $pdo->query("SELECT target_month, service_id, total_transactions FROM monthly_service_transactions");
+        while ($mq_row = $mq_stmt->fetch(PDO::FETCH_ASSOC)) {
+            $ym = $mq_row['target_month'];
+            $sid = (int)$mq_row['service_id'];
+            $tt = (int)$mq_row['total_transactions'];
+            $monthly_service_breakdowns[$ym][$sid] = $tt;
+            $monthly_quota_totals[$ym] = ($monthly_quota_totals[$ym] ?? 0) + $tt;
+        }
+    } catch (Throwable $e) {}
 
     if (!preg_match('/^\d{4}-\d{2}$/', $active_rep_month)) {
         $active_rep_month = !empty($month_tallies[0]['ym']) ? $month_tallies[0]['ym'] : date('Y-m');
@@ -910,22 +1145,88 @@ if ($pdo) {
         }
     } catch (Throwable $e) {}
 
-    // Query saved official total transactions digits for this month from monthly_service_transactions
-    $db_saved_quotas = [];
-    ensure_monthly_transactions_table($pdo);
-    try {
-        $q_stmt = $pdo->prepare("SELECT service_id, total_transactions FROM monthly_service_transactions WHERE target_month = ?");
-        $q_stmt->execute([$active_rep_month]);
-        while ($qrow = $q_stmt->fetch(PDO::FETCH_ASSOC)) {
-            $db_saved_quotas[(int)$qrow['service_id']] = (int)$qrow['total_transactions'];
-        }
-    } catch (Throwable $e) {}
+    $db_saved_quotas = $monthly_service_breakdowns[$active_rep_month] ?? [];
 }
 
 if (!preg_match('/^\d{4}-\d{2}$/', $active_rep_month)) {
     $active_rep_month = date('Y-m');
 }
 $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
+
+// Build lookup of responses by YYYY-MM
+$resp_by_month = [];
+foreach ($month_tallies as $mt) {
+    $tot = (int)$mt['total_cnt'];
+    $blk = (int)$mt['bulk_cnt'];
+    $resp_by_month[$mt['ym']] = [
+        'total' => $tot,
+        'bulk' => $blk,
+        'real' => max(0, $tot - $blk),
+        'label' => $mt['m_label']
+    ];
+}
+
+// Available years for the year filter
+$available_years = [date('Y')];
+foreach ($month_tallies as $mt) {
+    $y = substr($mt['ym'], 0, 4);
+    if ($y && !in_array($y, $available_years)) {
+        $available_years[] = $y;
+    }
+}
+foreach (array_keys($monthly_quota_totals) as $ym) {
+    $y = substr($ym, 0, 4);
+    if ($y && !in_array($y, $available_years)) {
+        $available_years[] = $y;
+    }
+}
+rsort($available_years);
+
+$selected_year = $_GET['year'] ?? '';
+if (!preg_match('/^\d{4}$/', $selected_year)) {
+    $selected_year = !empty($month_tallies[0]['ym']) ? substr($month_tallies[0]['ym'], 0, 4) : date('Y');
+}
+
+// Build 12 calendar months for $selected_year (January to December)
+$year_month_rows = [];
+$annual_total_resp = 0;
+$annual_total_real = 0;
+$annual_total_bulk = 0;
+$annual_total_tt = 0;
+
+for ($m = 1; $m <= 12; $m++) {
+    $m_pad = str_pad($m, 2, '0', STR_PAD_LEFT);
+    $ym = $selected_year . '-' . $m_pad;
+    $m_name = date('F', mktime(0, 0, 0, $m, 10, (int)$selected_year));
+    $m_label = $m_name . ' ' . $selected_year;
+
+    $r_tot = $resp_by_month[$ym]['total'] ?? 0;
+    $r_blk = $resp_by_month[$ym]['bulk'] ?? 0;
+    $r_real = $resp_by_month[$ym]['real'] ?? 0;
+
+    $has_saved = isset($monthly_quota_totals[$ym]);
+    $tt_val = $has_saved ? $monthly_quota_totals[$ym] : $r_tot;
+
+    $annual_total_resp += $r_tot;
+    $annual_total_real += $r_real;
+    $annual_total_bulk += $r_blk;
+    $annual_total_tt += $tt_val;
+
+    $cov_pct = ($tt_val > 0) ? ($r_tot / $tt_val) * 100 : 0;
+
+    $year_month_rows[] = [
+        'ym' => $ym,
+        'month_num' => $m,
+        'month_name' => $m_name,
+        'month_label' => $m_label,
+        'resp_total' => $r_tot,
+        'resp_real' => $r_real,
+        'resp_bulk' => $r_blk,
+        'total_transactions' => $tt_val,
+        'has_saved' => $has_saved,
+        'coverage_pct' => $cov_pct
+    ];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1393,36 +1694,52 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
         }
 
         /* OVERALL RESPONSES & TOTAL TRANSACTION TABLE STYLING */
-        #overallResponsesSvcTable {
+        #monthTransactionsTable,
+        #overallResponsesSvcTable,
+        #modalBreakdownTable {
             border-collapse: separate;
             border-spacing: 0;
         }
-        #overallResponsesSvcTable tbody tr {
+        #monthTransactionsTable tbody tr,
+        #overallResponsesSvcTable tbody tr,
+        #modalBreakdownTable tbody tr {
             transition: background-color 0.15s ease;
         }
-        #overallResponsesSvcTable tbody tr:hover {
+        #monthTransactionsTable tbody tr:hover,
+        #overallResponsesSvcTable tbody tr:hover,
+        #modalBreakdownTable tbody tr:hover {
             background-color: rgba(5, 150, 105, 0.04);
         }
-        .overall-tt-input {
+        .month-tt-input,
+        .overall-tt-input,
+        .modal-svc-tt-input {
             border-radius: 8px;
             border: 1px solid var(--border-subtle);
             font-weight: 700;
             transition: all 0.15s ease;
         }
-        .overall-tt-input:focus {
+        .month-tt-input:focus,
+        .overall-tt-input:focus,
+        .modal-svc-tt-input:focus {
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
             background-color: #f0fdf4;
         }
-        [data-bs-theme="dark"] #overallResponsesSvcTable tbody tr:hover {
+        [data-bs-theme="dark"] #monthTransactionsTable tbody tr:hover,
+        [data-bs-theme="dark"] #overallResponsesSvcTable tbody tr:hover,
+        [data-bs-theme="dark"] #modalBreakdownTable tbody tr:hover {
             background-color: rgba(255, 255, 255, 0.03);
         }
-        [data-bs-theme="dark"] .overall-tt-input {
+        [data-bs-theme="dark"] .month-tt-input,
+        [data-bs-theme="dark"] .overall-tt-input,
+        [data-bs-theme="dark"] .modal-svc-tt-input {
             background-color: #0f172a !important;
             border-color: #334155 !important;
             color: #f1f5f9 !important;
         }
-        [data-bs-theme="dark"] .overall-tt-input:focus {
+        [data-bs-theme="dark"] .month-tt-input:focus,
+        [data-bs-theme="dark"] .overall-tt-input:focus,
+        [data-bs-theme="dark"] .modal-svc-tt-input:focus {
             border-color: #10b981 !important;
             background-color: #1e293b !important;
         }
@@ -1840,44 +2157,40 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
             </div>
         </div>
 
-        <!-- OVERALL RESPONSES & TOTAL TRANSACTION CARD -->
+        <!-- OVERALL RESPONSES & TOTAL TRANSACTION CARD (MONTH TABLE) -->
         <div class="card-minimal" id="overallResponsesCard">
             <div class="card-header-clean flex-wrap gap-2 pb-2 border-bottom">
                 <div class="d-flex align-items-center gap-2.5">
                     <div class="text-primary fs-4 d-flex align-items-center">
-                        <i class="ph-bold ph-chart-bar"></i>
+                        <i class="ph-bold ph-calendar-blank"></i>
                     </div>
                     <div>
                         <h6 class="card-title-clean">Overall Responses &amp; Transactions</h6>
-                        <span class="text-muted" style="font-size: 0.78rem;">Monthly breakdown of survey responses and transaction quotas for the 13 PAO services.</span>
+                        <span class="text-muted" style="font-size: 0.78rem;">Monthly survey responses and official total transaction quotas for <?= htmlspecialchars($selected_year) ?>.</span>
                     </div>
                 </div>
 
                 <div class="d-flex align-items-center gap-2 ms-auto flex-wrap">
-                    <!-- Active Month Selector Dropdown -->
+                    <!-- Year Selector Dropdown -->
                     <form method="GET" action="admin_bulk.php#overallResponsesCard" class="d-inline-flex align-items-center gap-1.5 m-0">
-                        <label class="text-muted small fw-bold mb-0">Month:</label>
-                        <select name="report_month" class="form-select form-select-sm fw-bold border" onchange="this.form.submit()" style="min-width: 175px;">
-                            <?php if (!empty($month_tallies)): ?>
-                                <?php foreach ($month_tallies as $mt): ?>
-                                    <option value="<?= htmlspecialchars($mt['ym']) ?>" <?= ($mt['ym'] === $active_rep_month) ? 'selected' : '' ?>>
-                                        <?= htmlspecialchars($mt['m_label']) ?> (<?= number_format($mt['total_cnt']) ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <option value="<?= htmlspecialchars($active_rep_month) ?>" selected><?= htmlspecialchars($active_month_label) ?></option>
-                            <?php endif; ?>
+                        <label class="text-muted small fw-bold mb-0">Year:</label>
+                        <select name="year" class="form-select form-select-sm fw-bold border" onchange="this.form.submit()" style="min-width: 105px;">
+                            <?php foreach ($available_years as $yr): ?>
+                                <option value="<?= htmlspecialchars($yr) ?>" <?= ($yr === $selected_year) ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($yr) ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
                     </form>
 
-                    <!-- Quick Action: Print Official CSM Report -->
-                    <a href="print_report.php?month=<?= urlencode($active_rep_month) ?>" target="_blank" class="btn btn-sm btn-primary fw-semibold rounded-3 py-1.5 px-3 d-inline-flex align-items-center gap-1.5 shadow-sm" title="Open official 4-page ARTA CSM Report in new window">
-                        <i class="ph-bold ph-printer"></i> Print Report
-                    </a>
+                    <!-- Save All Quotas Button -->
+                    <button type="submit" form="monthTotalsForm" class="btn btn-sm btn-primary fw-semibold rounded-3 py-1.5 px-3 d-inline-flex align-items-center gap-1.5 shadow-sm" id="saveAllMonthQuotasBtn" title="Save total transaction quotas for all 12 months">
+                        <i class="ph-bold ph-floppy-disk"></i> Save Quotas
+                    </button>
 
-                    <!-- Quick Action: Copy 25-Col Data Table -->
-                    <button type="button" class="btn btn-sm btn-outline-success fw-semibold rounded-3 py-1.5 px-3 d-inline-flex align-items-center gap-1.5" onclick="copyMonthData('<?= htmlspecialchars($active_rep_month) ?>', 'data_only', this)" title="Copy 25-column table for Excel">
-                        <i class="ph-bold ph-copy"></i> Copy Table
+                    <!-- Quick Save All via AJAX -->
+                    <button type="button" class="btn btn-sm btn-outline-primary fw-semibold rounded-3 py-1.5 px-3 d-inline-flex align-items-center gap-1.5" onclick="saveAllMonthTotalsAjax(this)" title="Fast AJAX save for all months">
+                        <i class="ph-bold ph-lightning"></i> Quick Save All
                     </button>
 
                     <!-- Dropdown for more options (Download CSV, Preview, Wipe Month) -->
@@ -1887,32 +2200,23 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1.5 rounded-3" style="min-width: 230px; font-size: 0.85rem;">
                             <li class="dropdown-header text-uppercase fw-bold text-muted" style="font-size: 0.68rem; letter-spacing: 0.05em;">
-                                <?= htmlspecialchars($active_month_label) ?>
+                                Year <?= htmlspecialchars($selected_year) ?> Options
                             </li>
                             <li>
-                                <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="copyMonthData('<?= htmlspecialchars($active_rep_month) ?>', 'full', this)">
-                                    <i class="ph-bold ph-microsoft-excel-logo text-success fs-5"></i>
+                                <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="print_report.php?month=<?= urlencode($active_rep_month) ?>" target="_blank">
+                                    <i class="ph-bold ph-printer text-primary fs-5"></i>
                                     <div>
-                                        <div class="fw-semibold text-dark">Full Template</div>
-                                        <div class="text-muted small" style="font-size: 0.72rem;">Summary and data rows</div>
+                                        <div class="fw-semibold text-dark">Print Official Report</div>
+                                        <div class="text-muted small" style="font-size: 0.72rem;">Active month (<?= htmlspecialchars($active_month_label) ?>)</div>
                                     </div>
-                                </button>
-                            </li>
-                            <li>
-                                <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="copyMonthData('<?= htmlspecialchars($active_rep_month) ?>', 'summary_only', this)">
-                                    <i class="ph-bold ph-chart-bar text-warning fs-5"></i>
-                                    <div>
-                                        <div class="fw-semibold text-dark">Summary Tallies</div>
-                                        <div class="text-muted small" style="font-size: 0.72rem;">ARTA category breakdown</div>
-                                    </div>
-                                </button>
+                                </a>
                             </li>
                             <li>
                                 <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="admin_bulk.php?action=download_csm_csv&month=<?= urlencode($active_rep_month) ?>">
                                     <i class="ph-bold ph-file-csv text-info fs-5"></i>
                                     <div>
                                         <div class="fw-semibold text-dark">Download CSV</div>
-                                        <div class="text-muted small" style="font-size: 0.72rem;">Spreadsheet file</div>
+                                        <div class="text-muted small" style="font-size: 0.72rem;">Active month spreadsheet</div>
                                     </div>
                                 </a>
                             </li>
@@ -1921,7 +2225,7 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                                     <i class="ph-bold ph-eye text-secondary fs-5"></i>
                                     <div>
                                         <div class="fw-semibold text-dark">Preview Export</div>
-                                        <div class="text-muted small" style="font-size: 0.72rem;">Inspect columns before copying</div>
+                                        <div class="text-muted small" style="font-size: 0.72rem;">Inspect active month columns</div>
                                     </div>
                                 </button>
                             </li>
@@ -1931,7 +2235,7 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                                     <i class="ph-bold ph-trash fs-5"></i>
                                     <div>
                                         <div class="fw-semibold">Wipe Month Data</div>
-                                        <div class="text-muted small" style="font-size: 0.72rem;">Delete records for month</div>
+                                        <div class="text-muted small" style="font-size: 0.72rem;">Delete records for <?= htmlspecialchars($active_month_label) ?></div>
                                     </div>
                                 </button>
                             </li>
@@ -1940,220 +2244,335 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                 </div>
             </div>
 
-            <!-- Month Summary Badges Bar -->
+            <!-- Annual Summary Metrics Badges Bar -->
             <div class="d-flex align-items-center justify-content-between pt-2 pb-3 flex-wrap gap-2">
                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <span class="pill-badge pill-slate">Month: <strong><?= htmlspecialchars($active_month_label) ?></strong></span>
-                    <span class="pill-badge pill-blue">Responses: <strong id="activeMonthTotalRespBadge"><?= number_format($db_active_total) ?></strong></span>
-                    <span class="pill-badge pill-emerald">Real: <strong><?= number_format($db_active_real) ?></strong></span>
-                    <?php if ($db_active_bulk > 0): ?>
-                        <span class="pill-badge pill-amber">Bulk: <strong><?= number_format($db_active_bulk) ?></strong></span>
+                    <span class="pill-badge pill-slate">Year: <strong><?= htmlspecialchars($selected_year) ?></strong></span>
+                    <span class="pill-badge pill-blue">Responses: <strong id="annualTotalRespBadge"><?= number_format($annual_total_resp) ?></strong></span>
+                    <span class="pill-badge pill-emerald">Real: <strong><?= number_format($annual_total_real) ?></strong></span>
+                    <?php if ($annual_total_bulk > 0): ?>
+                        <span class="pill-badge pill-amber">Bulk: <strong><?= number_format($annual_total_bulk) ?></strong></span>
                     <?php endif; ?>
+                    <span class="pill-badge pill-slate">Total Transactions: <strong id="annualTtBadge"><?= number_format($annual_total_tt) ?></strong></span>
+                    <span class="pill-badge pill-emerald">Coverage: <strong id="annualCoverageBadge"><?= $annual_total_tt > 0 ? number_format(($annual_total_resp / $annual_total_tt) * 100, 1) : '0.0' ?>%</strong></span>
                 </div>
                 <div class="text-muted small d-inline-flex align-items-center gap-1.5">
                     <i class="ph-bold ph-pencil-simple text-primary"></i>
-                    <span>"Total Transactions" values can be edited directly to match registry volume.</span>
+                    <span>"Total Transactions" values can be edited directly per month (e.g. 100 total, 200 total).</span>
                 </div>
             </div>
 
-            <!-- Official 13-Service Breakdown Table Form -->
-            <form method="POST" action="admin_bulk.php#overallResponsesCard" id="overallQuotasForm">
-                <input type="hidden" name="save_monthly_quotas" value="1">
-                <input type="hidden" name="quota_target_month" value="<?= htmlspecialchars($active_rep_month) ?>">
+            <!-- Month Table Form (January to December) -->
+            <form method="POST" action="admin_bulk.php#overallResponsesCard" id="monthTotalsForm">
+                <input type="hidden" name="save_all_month_totals" value="1">
+                <input type="hidden" name="year" value="<?= htmlspecialchars($selected_year) ?>">
 
                 <div class="summary-table-container border rounded-3 overflow-hidden shadow-xs mb-3">
-                    <table class="table table-hover align-middle mb-0" id="overallResponsesSvcTable">
+                    <table class="table table-hover align-middle mb-0" id="monthTransactionsTable">
                         <thead class="table-light border-bottom">
                             <tr>
-                                <th style="width: 50px;" class="text-center">#</th>
-                                <th>External Service</th>
-                                <th style="width: 170px;" class="text-center">Responses</th>
-                                <th style="width: 200px;" class="text-center">Total Transactions</th>
-                                <th style="width: 110px;" class="text-center">Share</th>
+                                <th style="width: 170px;">Month</th>
+                                <th style="width: 180px;" class="text-center">Survey Responses</th>
+                                <th style="width: 230px;" class="text-center">Total Transactions</th>
+                                <th style="width: 170px;" class="text-center">Coverage / Status</th>
+                                <th class="text-end" style="min-width: 250px;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php 
-                                $sum_resp = array_sum($db_service_counts);
-                                $sum_tt = 0;
-                                foreach ($servicesMeta as $idx => $s): 
-                                    $rCount = $db_service_counts[$idx] ?? 0;
-                                    $hasSavedDigit = isset($db_saved_quotas[$idx]);
-                                    $savedTt = $hasSavedDigit ? (int)$db_saved_quotas[$idx] : $rCount;
-                                    $sum_tt += $savedTt;
-                                    $sharePct = $sum_resp > 0 ? number_format(($rCount / $sum_resp) * 100, 1) : '0.0';
+                            <?php foreach ($year_month_rows as $mr): 
+                                $rCount = $mr['resp_total'];
+                                $ttCount = $mr['total_transactions'];
+                                $cov = $mr['coverage_pct'];
+                                $hasSaved = $mr['has_saved'];
                             ?>
-                                <tr>
-                                    <td class="text-center">
-                                        <span class="badge bg-light text-primary border fw-bold px-2 py-1 rounded-2">
-                                            #<?= $idx ?>
-                                        </span>
-                                    </td>
+                                <tr id="monthRow_<?= $mr['ym'] ?>">
                                     <td>
-                                        <div class="fw-bold text-dark" style="font-size: 0.88rem;">
-                                            <?= htmlspecialchars($s['title']) ?>
-                                        </div>
-                                        <div class="text-muted" style="font-size: 0.74rem;">
-                                            <?= htmlspecialchars($s['desc']) ?>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <i class="ph-bold ph-calendar text-primary fs-5"></i>
+                                            <div>
+                                                <div class="fw-bold text-dark" style="font-size: 0.92rem;">
+                                                    <?= htmlspecialchars($mr['month_name']) ?>
+                                                </div>
+                                                <div class="text-muted small" style="font-size: 0.72rem;">
+                                                    <?= htmlspecialchars($mr['ym']) ?>
+                                                </div>
+                                            </div>
                                         </div>
                                     </td>
                                     <td class="text-center">
-                                        <span class="fw-bold text-dark fs-6 card-resp-val" id="cardResp_<?= $idx ?>">
-                                            <?= number_format($rCount) ?>
-                                        </span>
-                                    </td>
-                                    <td class="text-center">
-                                        <div class="d-inline-flex align-items-center justify-content-center gap-1.5">
-                                            <input type="number" min="0" max="999999" 
-                                                   name="quotas[<?= $idx ?>]" 
-                                                   class="form-control form-control-sm text-center fw-bold overall-tt-input" 
-                                                   id="cardTt_<?= $idx ?>" 
-                                                   data-idx="<?= $idx ?>" 
-                                                   value="<?= $savedTt ?>" 
-                                                   style="width: 120px; font-size: 0.88rem;" 
-                                                   oninput="recalcCardOverallTotal()">
-                                            <?php if ($hasSavedDigit): ?>
-                                                <span class="badge bg-success-subtle text-success border border-success-subtle py-1" style="font-size: 0.65rem;" title="Saved in database">DB</span>
+                                        <div class="d-flex flex-column align-items-center gap-1">
+                                            <span class="fw-bold text-dark fs-6" id="mRespTotal_<?= $mr['ym'] ?>">
+                                                <?= number_format($rCount) ?>
+                                            </span>
+                                            <?php if ($rCount > 0): ?>
+                                                <div class="d-flex align-items-center gap-1">
+                                                    <span class="pill-badge pill-emerald py-0 px-1.5" style="font-size: 0.68rem;" title="Real citizen responses">
+                                                        <?= number_format($mr['resp_real']) ?> Real
+                                                    </span>
+                                                    <?php if ($mr['resp_bulk'] > 0): ?>
+                                                        <span class="pill-badge pill-amber py-0 px-1.5" style="font-size: 0.68rem;" title="Bulk dummy responses">
+                                                            <?= number_format($mr['resp_bulk']) ?> Bulk
+                                                        </span>
+                                                    <?php endif; ?>
+                                                </div>
+                                            <?php else: ?>
+                                                <span class="text-muted small" style="font-size: 0.75rem;">No responses</span>
                                             <?php endif; ?>
                                         </div>
                                     </td>
                                     <td class="text-center">
-                                        <span class="badge bg-light text-secondary border small card-share-val" id="cardShare_<?= $idx ?>">
-                                            <?= $sharePct ?>%
+                                        <div class="d-inline-flex align-items-center justify-content-center gap-1.5">
+                                            <input type="number" min="0" max="999999" 
+                                                   name="month_totals[<?= $mr['ym'] ?>]" 
+                                                   class="form-control form-control-sm text-center fw-bold month-tt-input" 
+                                                   id="monthTt_<?= $mr['ym'] ?>" 
+                                                   data-ym="<?= $mr['ym'] ?>" 
+                                                   data-resp="<?= $rCount ?>" 
+                                                   value="<?= $ttCount ?>" 
+                                                   style="width: 105px; font-size: 0.9rem;" 
+                                                   oninput="recalcMonthTableAnnualTotal()">
+                                            <span class="text-muted fw-semibold small">total</span>
+                                            <?php if ($hasSaved): ?>
+                                                <span class="badge bg-success-subtle text-success border border-success-subtle py-1" style="font-size: 0.65rem;" title="Saved in database">DB</span>
+                                            <?php endif; ?>
+                                            <button type="button" class="btn btn-sm btn-light border p-1 text-primary rounded-2 ms-1" 
+                                                    onclick="saveSingleMonthAjax('<?= $mr['ym'] ?>', this)" title="Quick save this month quota">
+                                                <i class="ph-bold ph-floppy-disk fs-6"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span id="mStatus_<?= $mr['ym'] ?>">
+                                            <?php if ($ttCount > 0 && $rCount >= $ttCount): ?>
+                                                <span class="pill-badge pill-emerald fw-semibold">
+                                                    <i class="ph-bold ph-check-circle me-1"></i> Target Met (<?= number_format($cov, 1) ?>%)
+                                                </span>
+                                            <?php elseif ($ttCount > 0 && $rCount > 0): ?>
+                                                <span class="pill-badge pill-blue fw-semibold">
+                                                    <?= number_format($cov, 1) ?>% Covered
+                                                </span>
+                                            <?php elseif ($ttCount > 0): ?>
+                                                <span class="pill-badge pill-amber fw-semibold">
+                                                    Pending Responses
+                                                </span>
+                                            <?php elseif ($rCount > 0): ?>
+                                                <span class="pill-badge pill-blue fw-semibold">
+                                                    <?= number_format($rCount) ?> Responses
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="pill-badge pill-slate">
+                                                    No Records
+                                                </span>
+                                            <?php endif; ?>
                                         </span>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="d-inline-flex align-items-center gap-1.5 flex-wrap justify-content-end">
+                                            <!-- 13 Services Breakdown Modal trigger -->
+                                            <button type="button" 
+                                                    class="btn btn-sm btn-outline-secondary rounded-3 py-1 px-2.5 d-inline-flex align-items-center gap-1 fw-semibold" 
+                                                    onclick="openMonthBreakdownModal('<?= $mr['ym'] ?>', '<?= htmlspecialchars($mr['month_label']) ?>')" 
+                                                    title="View and edit individual 13 PAO services quotas for <?= htmlspecialchars($mr['month_label']) ?>">
+                                                <i class="ph-bold ph-list-numbers fs-6"></i>
+                                                <span>13 Services</span>
+                                            </button>
+
+                                            <!-- Print Official CSM Report -->
+                                            <a href="print_report.php?month=<?= urlencode($mr['ym']) ?>" 
+                                               target="_blank" 
+                                               class="btn btn-sm btn-outline-primary rounded-3 py-1 px-2.5 d-inline-flex align-items-center gap-1 fw-semibold" 
+                                               title="Print Official 4-page ARTA CSM Report">
+                                                <i class="ph-bold ph-printer fs-6"></i>
+                                                <span>Print</span>
+                                            </a>
+
+                                            <!-- Copy Table for Excel -->
+                                            <button type="button" 
+                                                    class="btn btn-sm btn-outline-success rounded-3 py-1 px-2.5 d-inline-flex align-items-center gap-1 fw-semibold" 
+                                                    onclick="copyMonthData('<?= $mr['ym'] ?>', 'data_only', this)" 
+                                                    title="Copy 25-column ARTA table for Excel">
+                                                <i class="ph-bold ph-copy fs-6"></i>
+                                                <span>Copy</span>
+                                            </button>
+
+                                            <!-- Dropdown for more options -->
+                                            <div class="dropdown d-inline-block">
+                                                <button type="button" class="btn btn-sm btn-light border rounded-3 py-1 px-1.5 text-muted" data-bs-toggle="dropdown" aria-expanded="false" title="More options">
+                                                    <i class="ph-bold ph-dots-three-vertical fs-6"></i>
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1 rounded-3" style="min-width: 220px; font-size: 0.82rem;">
+                                                    <li class="dropdown-header text-uppercase fw-bold text-muted" style="font-size: 0.65rem; letter-spacing: 0.05em;">
+                                                        <?= htmlspecialchars($mr['month_label']) ?>
+                                                    </li>
+                                                    <li>
+                                                        <button class="dropdown-item d-flex align-items-center gap-2 py-1.5" type="button" onclick="copyMonthData('<?= $mr['ym'] ?>', 'full', this)">
+                                                            <i class="ph-bold ph-microsoft-excel-logo text-success"></i>
+                                                            <div>
+                                                                <div class="fw-semibold text-dark">Full Template</div>
+                                                                <div class="text-muted small" style="font-size: 0.7rem;">Summary and data rows</div>
+                                                            </div>
+                                                        </button>
+                                                    </li>
+                                                    <li>
+                                                        <button class="dropdown-item d-flex align-items-center gap-2 py-1.5" type="button" onclick="copyMonthData('<?= $mr['ym'] ?>', 'summary_only', this)">
+                                                            <i class="ph-bold ph-chart-bar text-warning"></i>
+                                                            <div>
+                                                                <div class="fw-semibold text-dark">Summary Tallies</div>
+                                                                <div class="text-muted small" style="font-size: 0.7rem;">ARTA category breakdown</div>
+                                                            </div>
+                                                        </button>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item d-flex align-items-center gap-2 py-1.5" href="admin_bulk.php?action=download_csm_csv&month=<?= urlencode($mr['ym']) ?>">
+                                                            <i class="ph-bold ph-file-csv text-info"></i>
+                                                            <div>
+                                                                <div class="fw-semibold text-dark">Download CSV</div>
+                                                                <div class="text-muted small" style="font-size: 0.7rem;">Spreadsheet file</div>
+                                                            </div>
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <button class="dropdown-item d-flex align-items-center gap-2 py-1.5" type="button" onclick="openPreviewExportModal('<?= $mr['ym'] ?>', '<?= htmlspecialchars($mr['month_label']) ?>', <?= $rCount ?>)">
+                                                            <i class="ph-bold ph-eye text-secondary"></i>
+                                                            <div>
+                                                                <div class="fw-semibold text-dark">Preview Export</div>
+                                                                <div class="text-muted small" style="font-size: 0.7rem;">Inspect table columns</div>
+                                                            </div>
+                                                        </button>
+                                                    </li>
+                                                    <li><hr class="dropdown-divider my-1"></li>
+                                                    <li>
+                                                        <button class="dropdown-item d-flex align-items-center gap-2 py-1.5 text-danger" type="button" onclick="openWipeForMonth('<?= $mr['ym'] ?>')">
+                                                            <i class="ph-bold ph-trash"></i>
+                                                            <div>
+                                                                <div class="fw-semibold">Wipe Month Data</div>
+                                                                <div class="text-muted small" style="font-size: 0.7rem;">Delete records for month</div>
+                                                            </div>
+                                                        </button>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
                         <tfoot class="border-top">
                             <tr class="table-light fw-bold" style="border-top: 2px solid var(--border-subtle);">
-                                <td colspan="2" class="ps-3 text-uppercase tracking-wider small fw-bold">
-                                    EXTERNAL SERVICE TOTAL
+                                <td class="ps-3 text-uppercase tracking-wider small fw-bold">
+                                    ANNUAL TOTAL (<?= htmlspecialchars($selected_year) ?>)
                                 </td>
-                                <td class="text-center fs-6 text-primary fw-bold" id="cardExternalTotalResp">
-                                    <?= number_format($sum_resp) ?>
+                                <td class="text-center fs-6 text-primary fw-bold" id="annualTotalResp">
+                                    <?= number_format($annual_total_resp) ?>
                                 </td>
-                                <td class="text-center fs-6 text-success fw-bold" id="cardExternalTotalTt">
-                                    <?= number_format($sum_tt) ?>
+                                <td class="text-center fs-6 text-success fw-bold">
+                                    <span id="annualTotalTt"><?= number_format($annual_total_tt) ?></span> <span class="small fw-semibold text-muted">total</span>
                                 </td>
-                                <td class="text-center text-muted small">
-                                    100.0%
+                                <td class="text-center fs-6 text-dark fw-bold" id="annualTotalCoverage">
+                                    <?= $annual_total_tt > 0 ? number_format(($annual_total_resp / $annual_total_tt) * 100, 1) : '0.0' ?>%
                                 </td>
-                            </tr>
-                            <tr class="fw-bold bg-dark text-white">
-                                <td colspan="2" class="ps-3 text-uppercase tracking-wider small fw-bold text-white">
-                                    OVERALL TOTAL
-                                </td>
-                                <td class="text-center fs-6 text-white fw-bold" id="cardOverallFinalResp">
-                                    <?= number_format($sum_resp) ?>
-                                </td>
-                                <td class="text-center fs-6 text-warning fw-bold" id="cardOverallFinalTt">
-                                    <?= number_format($sum_tt) ?>
-                                </td>
-                                <td class="text-center text-white small">
-                                    100.0%
+                                <td class="text-end pe-3">
+                                    <button type="button" class="btn btn-sm btn-outline-primary fw-semibold rounded-3 py-1 px-3 d-inline-flex align-items-center gap-1.5" onclick="saveAllMonthTotalsAjax(this)">
+                                        <i class="ph-bold ph-floppy-disk"></i> Save All
+                                    </button>
                                 </td>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
 
-                <!-- Action Bar for Saving Quotas as Digits -->
-                <div class="d-flex align-items-center justify-content-between p-3 bg-light border rounded-3 mb-3 flex-wrap gap-3">
+                <!-- Action Bar for Saving Quotas -->
+                <div class="d-flex align-items-center justify-content-between p-3 bg-light border rounded-3 mb-2 flex-wrap gap-3">
                     <div class="d-flex align-items-center gap-2 small text-muted">
                         <i class="ph-bold ph-database text-primary fs-5"></i>
-                        <span>Quotas are stored as monthly single-cell values in the database without adding artificial survey rows.</span>
+                        <span>Quotas are stored directly in the database as digits without generating artificial dummy survey records.</span>
                     </div>
                     <div class="d-flex align-items-center gap-2 ms-auto flex-wrap">
-                        <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold py-1.5 px-3 rounded-3 d-inline-flex align-items-center gap-1.5" onclick="copyServiceQuotasFromTop()" title="Load values entered in the top panel into this table">
+                        <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold py-1.5 px-3 rounded-3 d-inline-flex align-items-center gap-1.5" onclick="syncTopQuotasToMonthTable()" title="Sync quotas entered in Assessment Generator into the Month Table">
                             <i class="ph-bold ph-arrow-down"></i> Sync from Top
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-primary fw-semibold py-1.5 px-3 rounded-3 d-inline-flex align-items-center gap-1.5" onclick="saveQuotasAjax(this)" title="Save quotas via AJAX">
-                            <i class="ph-bold ph-lightning"></i> Quick Save
+                        <button type="button" class="btn btn-sm btn-outline-primary fw-semibold py-1.5 px-3 rounded-3 d-inline-flex align-items-center gap-1.5" onclick="saveAllMonthTotalsAjax(this)" title="Save all months via AJAX">
+                            <i class="ph-bold ph-lightning"></i> Quick Save All
                         </button>
-                        <button type="submit" class="btn btn-sm btn-primary fw-semibold py-1.5 px-3 rounded-3 shadow-sm d-inline-flex align-items-center gap-1.5" id="saveQuotasDbBtn">
+                        <button type="submit" class="btn btn-sm btn-primary fw-semibold py-1.5 px-3 rounded-3 shadow-sm d-inline-flex align-items-center gap-1.5">
                             <i class="ph-bold ph-floppy-disk"></i>
                             <span>Save Quotas</span>
                         </button>
                     </div>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
 
-            <!-- Collapsible: View All Monthly Records Archive & History -->
-            <div class="pt-2 border-top">
-                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                    <button class="btn btn-sm btn-outline-secondary rounded-3 py-1.5 px-3 fw-semibold d-inline-flex align-items-center gap-1.5" type="button" data-bs-toggle="collapse" data-bs-target="#monthArchiveCollapse" aria-expanded="false" aria-controls="monthArchiveCollapse">
-                        <i class="ph-bold ph-caret-down"></i>
-                        <span>Monthly Records Archive (<?= count($month_tallies) ?> Months)</span>
-                    </button>
-                    <span class="text-muted small">Historical database counts and records by month.</span>
+<!-- 13 PAO SERVICES BREAKDOWN MODAL -->
+<div class="modal fade" id="monthBreakdownModal" tabindex="-1" aria-labelledby="monthBreakdownModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: var(--radius-card);">
+            <div class="modal-header border-bottom py-3 px-4">
+                <div class="d-flex align-items-center gap-2.5">
+                    <div class="text-primary fs-4 d-flex align-items-center">
+                        <i class="ph-bold ph-list-numbers"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark fs-6 mb-0" id="monthBreakdownModalLabel">13 PAO Services Breakdown</h5>
+                        <span class="text-muted small" id="monthBreakdownModalSubtitle">Target Month</span>
+                    </div>
                 </div>
-
-                <div class="collapse mt-3" id="monthArchiveCollapse">
-                    <?php if (!empty($month_tallies)): ?>
-                        <div class="summary-table-container border rounded-3 overflow-hidden">
-                            <table class="summary-table">
-                                <thead>
-                                    <tr>
-                                        <th>Target Month</th>
-                                        <th class="text-center">Bulk</th>
-                                        <th class="text-center">Real</th>
-                                        <th class="text-center">Total</th>
-                                        <th class="text-end">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($month_tallies as $mt): 
-                                        $bulkCount = (int)$mt['bulk_cnt'];
-                                        $totalCount = (int)$mt['total_cnt'];
-                                        $realCount = max(0, $totalCount - $bulkCount);
-                                    ?>
-                                        <tr>
-                                            <td>
-                                                <div class="d-flex align-items-center gap-2">
-                                                    <i class="ph-bold ph-calendar text-muted fs-6"></i>
-                                                    <span class="fw-bold text-dark"><?= htmlspecialchars($mt['m_label']) ?></span>
-                                                    <span class="text-muted small">(<?= htmlspecialchars($mt['ym']) ?>)</span>
-                                                </div>
-                                            </td>
-                                            <td class="text-center">
-                                                <span class="pill-badge pill-blue fw-bold">
-                                                    <?= number_format($bulkCount) ?>
-                                                </span>
-                                            </td>
-                                            <td class="text-center">
-                                                <span class="pill-badge pill-emerald fw-bold">
-                                                    <?= number_format($realCount) ?>
-                                                </span>
-                                            </td>
-                                            <td class="text-center">
-                                                <span class="pill-badge pill-slate fw-bold">
-                                                    <?= number_format($totalCount) ?>
-                                                </span>
-                                            </td>
-                                            <td class="text-end">
-                                                <div class="d-inline-flex align-items-center gap-1.5 flex-wrap justify-content-end">
-                                                    <a href="admin_bulk.php?report_month=<?= urlencode($mt['ym']) ?>#overallResponsesCard" class="btn btn-sm btn-outline-primary rounded-3 py-1 px-2.5 d-inline-flex align-items-center gap-1 fw-semibold" title="View in table">
-                                                        <i class="ph-bold ph-arrow-up-right"></i> View
-                                                    </a>
-                                                    <button type="button" 
-                                                            class="btn btn-sm btn-outline-success rounded-3 py-1 px-2.5 d-inline-flex align-items-center gap-1.5 fw-semibold" 
-                                                            onclick="copyMonthData('<?= htmlspecialchars($mt['ym']) ?>', 'data_only', this)" 
-                                                            title="Copy table">
-                                                        <i class="ph-bold ph-copy fs-6"></i>
-                                                        <span>Copy</span>
-                                                    </button>
-                                                    <button type="button" class="btn btn-sm btn-outline-danger rounded-3 py-1 px-2 d-inline-flex align-items-center gap-1 text-danger" onclick="openWipeForMonth('<?= htmlspecialchars($mt['ym']) ?>')" title="Wipe month records">
-                                                        <i class="ph-bold ph-trash"></i>
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div id="modalBreakdownLoading" class="text-center py-5">
+                    <i class="ph-bold ph-spinner-gap spin fs-2 text-primary mb-2"></i>
+                    <div class="text-muted small">Loading service response counts and transaction quotas...</div>
+                </div>
+                <div id="modalBreakdownContent" class="d-none">
+                    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="pill-badge pill-blue">Responses: <strong id="modalSumRespBadge">0</strong></span>
+                            <span class="pill-badge pill-emerald">Real: <strong id="modalRealRespBadge">0</strong></span>
+                            <span class="pill-badge pill-amber">Bulk: <strong id="modalBulkRespBadge">0</strong></span>
+                            <span class="pill-badge pill-slate">Total Transactions: <strong id="modalSumTtBadge">0</strong></span>
                         </div>
-                    <?php endif; ?>
+                        <div class="text-muted small">
+                            <i class="ph-bold ph-info text-primary"></i> Granular quotas for official ARTA CSM Page 4 report.
+                        </div>
+                    </div>
+                    <div class="summary-table-container border rounded-3 overflow-hidden shadow-xs mb-3">
+                        <table class="table table-hover align-middle mb-0" id="modalBreakdownTable">
+                            <thead class="table-light border-bottom">
+                                <tr>
+                                    <th style="width: 50px;" class="text-center">#</th>
+                                    <th>External Service</th>
+                                    <th style="width: 160px;" class="text-center">Responses</th>
+                                    <th style="width: 200px;" class="text-center">Total Transactions</th>
+                                    <th style="width: 100px;" class="text-center">Share</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modalBreakdownTbody">
+                                <!-- Populated dynamically by JS -->
+                            </tbody>
+                            <tfoot class="border-top">
+                                <tr class="table-light fw-bold">
+                                    <td colspan="2" class="ps-3 text-uppercase tracking-wider small fw-bold">SERVICE TOTAL</td>
+                                    <td class="text-center fs-6 text-primary fw-bold" id="modalFootResp">0</td>
+                                    <td class="text-center fs-6 text-success fw-bold" id="modalFootTt">0</td>
+                                    <td class="text-center text-muted small">100.0%</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top py-2.5 px-4 bg-light d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-3 py-1.5 px-3 fw-semibold" onclick="syncModalFromTopGenerator()">
+                    <i class="ph-bold ph-arrow-down"></i> Sync from Top Assessment Panel
+                </button>
+                <div class="d-flex align-items-center gap-2 ms-auto">
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-3 py-1.5 px-3 fw-semibold" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-sm btn-primary rounded-3 py-1.5 px-3 fw-semibold shadow-sm" id="modalSaveQuotasBtn" onclick="saveModalBreakdownQuotas(this)">
+                        <i class="ph-bold ph-floppy-disk"></i> Save 13 Service Quotas
+                    </button>
                 </div>
             </div>
         </div>
@@ -3073,14 +3492,19 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
             $(`#svcShare_${i}`).text(pct + '%');
         }
 
-        // Live sync with Overall Responses & Total Transaction card below
+        // Live sync with Month Table if target month matches
+        const activeMonth = $('#svcTableMonth').val();
+        if (total > 0 && activeMonth && $(`#monthTt_${activeMonth}`).length) {
+            $(`#monthTt_${activeMonth}`).val(total);
+            recalcMonthTableAnnualTotal();
+        }
         if (total > 0) {
             for (let i = 1; i <= 13; i++) {
                 const val = values[i] || 0;
-                $(`#cardResp_${i}`).text(val.toLocaleString());
-                $(`#cardTt_${i}`).val(val);
+                if ($(`#cardResp_${i}`).length) $(`#cardResp_${i}`).text(val.toLocaleString());
+                if ($(`#cardTt_${i}`).length) $(`#cardTt_${i}`).val(val);
             }
-            $('#activeMonthTotalRespBadge').text(total.toLocaleString());
+            if ($('#activeMonthTotalRespBadge').length) $('#activeMonthTotalRespBadge').text(total.toLocaleString());
             recalcCardOverallTotal();
         }
 
@@ -3388,6 +3812,303 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
         HTMLFormElement.prototype.submit.call(document.getElementById('generatorForm'));
     }
 
+    // ==========================================
+    // MONTH TABLE & 13 SERVICES MODAL LOGIC
+    // ==========================================
+
+    function recalcMonthTableAnnualTotal() {
+        let annualTt = 0;
+        let annualResp = 0;
+
+        $('.month-tt-input').each(function() {
+            const ym = $(this).data('ym');
+            const tt = parseInt($(this).val(), 10) || 0;
+            const resp = parseInt($(this).data('resp'), 10) || 0;
+
+            annualTt += tt;
+            annualResp += resp;
+
+            // Live update status badge for this month row
+            const statusEl = $(`#mStatus_${ym}`);
+            if (statusEl.length) {
+                if (tt > 0 && resp >= tt) {
+                    const cov = ((resp / tt) * 100).toFixed(1);
+                    statusEl.html(`<span class="pill-badge pill-emerald fw-semibold"><i class="ph-bold ph-check-circle me-1"></i> Target Met (${cov}%)</span>`);
+                } else if (tt > 0 && resp > 0) {
+                    const cov = ((resp / tt) * 100).toFixed(1);
+                    statusEl.html(`<span class="pill-badge pill-blue fw-semibold">${cov}% Covered</span>`);
+                } else if (tt > 0) {
+                    statusEl.html(`<span class="pill-badge pill-amber fw-semibold">Pending Responses</span>`);
+                } else if (resp > 0) {
+                    statusEl.html(`<span class="pill-badge pill-blue fw-semibold">${resp.toLocaleString()} Responses</span>`);
+                } else {
+                    statusEl.html(`<span class="pill-badge pill-slate">No Records</span>`);
+                }
+            }
+        });
+
+        $('#annualTotalTt').text(annualTt.toLocaleString());
+        if ($('#annualTtBadge').length) $('#annualTtBadge').text(annualTt.toLocaleString());
+        $('#annualTotalResp').text(annualResp.toLocaleString());
+        if ($('#annualTotalRespBadge').length) $('#annualTotalRespBadge').text(annualResp.toLocaleString());
+
+        const covPct = annualTt > 0 ? ((annualResp / annualTt) * 100).toFixed(1) : '0.0';
+        $('#annualTotalCoverage').text(covPct + '%');
+        if ($('#annualCoverageBadge').length) $('#annualCoverageBadge').text(covPct + '%');
+    }
+
+    async function saveSingleMonthAjax(ym, btn) {
+        const input = $(`#monthTt_${ym}`);
+        const totalVal = parseInt(input.val(), 10) || 0;
+        const originalHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="ph-bold ph-spinner-gap spin fs-6 text-primary"></i>`;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('target_month', ym);
+            formData.append('total_transactions', totalVal);
+
+            const res = await fetch('admin_bulk.php?action=save_single_month_total_ajax', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                showCopyToast('Quota Saved', `Stored ${totalVal.toLocaleString()} total transactions for ${ym}.`);
+                recalcMonthTableAnnualTotal();
+            } else {
+                alert('Error saving quota: ' + (data.message || 'Unknown error'));
+            }
+        } catch (err) {
+            alert('Network error: ' + err.message);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
+    }
+
+    async function saveAllMonthTotalsAjax(btn) {
+        const originalHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="ph-bold ph-spinner-gap spin fs-6"></i> <span>Saving All...</span>`;
+        }
+
+        const promises = [];
+        $('.month-tt-input').each(function() {
+            const ym = $(this).data('ym');
+            const val = parseInt($(this).val(), 10) || 0;
+            const fd = new FormData();
+            fd.append('target_month', ym);
+            fd.append('total_transactions', val);
+            promises.push(
+                fetch('admin_bulk.php?action=save_single_month_total_ajax', { method: 'POST', body: fd })
+                    .then(r => r.json())
+            );
+        });
+
+        try {
+            await Promise.all(promises);
+            showCopyToast('All Quotas Saved', 'Successfully saved transaction quotas for all 12 months.');
+            recalcMonthTableAnnualTotal();
+        } catch (err) {
+            alert('Error saving all quotas: ' + err.message);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
+    }
+
+    function syncTopQuotasToMonthTable() {
+        const targetMonth = $('#svcTableMonth').val();
+        if (!targetMonth) {
+            alert('Please select a Target Month in the Assessment Generator first.');
+            return;
+        }
+
+        let totalTop = 0;
+        $('.svc-quota-input').each(function() {
+            totalTop += parseInt($(this).val(), 10) || 0;
+        });
+
+        if ($(`#monthTt_${targetMonth}`).length) {
+            $(`#monthTt_${targetMonth}`).val(totalTop);
+            recalcMonthTableAnnualTotal();
+            showCopyToast('Quotas Synced', `Loaded ${totalTop.toLocaleString()} total transactions into ${targetMonth}.`);
+        } else {
+            showCopyToast('Notice', `Month ${targetMonth} is outside the currently viewed year.`);
+        }
+    }
+
+    // 13 PAO SERVICES BREAKDOWN MODAL LOGIC
+    let currentModalMonth = '';
+
+    async function openMonthBreakdownModal(ym, monthLabel) {
+        currentModalMonth = ym;
+        $('#monthBreakdownModalSubtitle').html(`Target Month: <strong class="text-dark">${monthLabel} (${ym})</strong>`);
+        $('#modalBreakdownLoading').removeClass('d-none');
+        $('#modalBreakdownContent').addClass('d-none');
+
+        const modalEl = document.getElementById('monthBreakdownModal');
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+
+        try {
+            const res = await fetch(`admin_bulk.php?action=get_month_breakdown_ajax&month=${encodeURIComponent(ym)}`);
+            const data = await res.json();
+            if (data.status !== 'success') {
+                throw new Error(data.message || 'Failed to load breakdown');
+            }
+
+            $('#modalSumRespBadge').text(Number(data.total_responses).toLocaleString());
+            $('#modalRealRespBadge').text(Number(data.total_real).toLocaleString());
+            $('#modalBulkRespBadge').text(Number(data.total_bulk).toLocaleString());
+            $('#modalSumTtBadge').text(Number(data.total_transactions).toLocaleString());
+
+            let rowsHtml = '';
+            const totalResp = Number(data.total_responses) || 0;
+            data.services.forEach(s => {
+                const share = totalResp > 0 ? ((s.responses / totalResp) * 100).toFixed(1) : '0.0';
+                rowsHtml += `
+                    <tr>
+                        <td class="text-center">
+                            <span class="badge bg-light text-primary border fw-bold px-2 py-1 rounded-2">#${s.id}</span>
+                        </td>
+                        <td>
+                            <div class="fw-bold text-dark" style="font-size: 0.88rem;">${s.title}</div>
+                            <div class="text-muted" style="font-size: 0.74rem;">${s.desc}</div>
+                        </td>
+                        <td class="text-center">
+                            <span class="fw-bold text-dark fs-6 modal-svc-resp" id="modalResp_${s.id}">${Number(s.responses).toLocaleString()}</span>
+                        </td>
+                        <td class="text-center">
+                            <div class="d-inline-flex align-items-center justify-content-center gap-1.5">
+                                <input type="number" min="0" max="999999" 
+                                       class="form-control form-control-sm text-center fw-bold modal-svc-tt-input" 
+                                       id="modalTt_${s.id}" 
+                                       data-id="${s.id}" 
+                                       value="${s.total_transactions}" 
+                                       style="width: 110px; font-size: 0.88rem;" 
+                                       oninput="recalcModalBreakdownTotal()">
+                                ${s.has_saved ? '<span class="badge bg-success-subtle text-success border border-success-subtle py-1" style="font-size: 0.65rem;">DB</span>' : ''}
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-light text-secondary border small modal-svc-share" id="modalShare_${s.id}">${share}%</span>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            $('#modalBreakdownTbody').html(rowsHtml);
+            recalcModalBreakdownTotal();
+            $('#modalBreakdownLoading').addClass('d-none');
+            $('#modalBreakdownContent').removeClass('d-none');
+        } catch (err) {
+            $('#modalBreakdownLoading').html(`
+                <div class="text-danger py-4">
+                    <i class="ph-bold ph-warning-circle fs-2 mb-2"></i>
+                    <div>Failed to load month breakdown: ${err.message}</div>
+                </div>
+            `);
+        }
+    }
+
+    function recalcModalBreakdownTotal() {
+        let sumTt = 0;
+        let sumResp = 0;
+        $('.modal-svc-tt-input').each(function() {
+            sumTt += parseInt($(this).val(), 10) || 0;
+        });
+        $('.modal-svc-resp').each(function() {
+            const val = parseInt($(this).text().replace(/[^0-9]/g, ''), 10) || 0;
+            sumResp += val;
+        });
+
+        $('#modalFootResp').text(sumResp.toLocaleString());
+        $('#modalFootTt').text(sumTt.toLocaleString());
+        $('#modalSumTtBadge').text(sumTt.toLocaleString());
+
+        // Live share recalculation
+        for (let i = 1; i <= 13; i++) {
+            const rTxt = $(`#modalResp_${i}`).text().replace(/[^0-9]/g, '');
+            const rVal = parseInt(rTxt, 10) || 0;
+            const pct = sumResp > 0 ? ((rVal / sumResp) * 100).toFixed(1) : '0.0';
+            $(`#modalShare_${i}`).text(pct + '%');
+        }
+    }
+
+    async function saveModalBreakdownQuotas(btn) {
+        if (!currentModalMonth) return;
+        const originalHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="ph-bold ph-spinner-gap spin fs-6"></i> <span>Saving...</span>`;
+        }
+
+        const quotas = {};
+        let totalSum = 0;
+        $('.modal-svc-tt-input').each(function() {
+            const sid = $(this).data('id');
+            const val = parseInt($(this).val(), 10) || 0;
+            quotas[sid] = val;
+            totalSum += val;
+        });
+
+        try {
+            const formData = new FormData();
+            formData.append('target_month', currentModalMonth);
+            for (const [k, v] of Object.entries(quotas)) {
+                formData.append(`quotas[${k}]`, v);
+            }
+
+            const res = await fetch('admin_bulk.php?action=save_monthly_quotas_ajax', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                showCopyToast(
+                    'Quotas Saved',
+                    `Stored ${totalSum.toLocaleString()} total transactions across 13 services for ${currentModalMonth}.`
+                );
+                // Update row in Month Table
+                $(`#monthTt_${currentModalMonth}`).val(totalSum);
+                recalcMonthTableAnnualTotal();
+                const modalEl = document.getElementById('monthBreakdownModal');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+            } else {
+                alert('Error saving quotas: ' + (data.message || 'Unknown error'));
+            }
+        } catch (err) {
+            alert('Network error: ' + err.message);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
+    }
+
+    function syncModalFromTopGenerator() {
+        let pulledCount = 0;
+        for (let i = 1; i <= 13; i++) {
+            const val = parseInt($(`#svcQuota_${i}`).val(), 10) || 0;
+            $(`#modalTt_${i}`).val(val);
+            pulledCount += val;
+        }
+        recalcModalBreakdownTotal();
+        showCopyToast('Quotas Synced', `Loaded ${pulledCount.toLocaleString()} transactions from top panel into modal.`);
+    }
+
     // Save Top Service Table Quotas directly as single digits in database
     async function saveServiceTableQuotasAsDigits(btn) {
         const monthVal = $('#svcTableMonth').val();
@@ -3433,11 +4154,10 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                     'Quotas Saved',
                     `Stored ${totalCount.toLocaleString()} total transactions for ${monthVal}.`
                 );
-                // Sync with overall responses table below
-                for (let i = 1; i <= 13; i++) {
-                    $(`#cardTt_${i}`).val(quotas[i] || 0);
+                if ($(`#monthTt_${monthVal}`).length) {
+                    $(`#monthTt_${monthVal}`).val(totalCount);
+                    recalcMonthTableAnnualTotal();
                 }
-                recalcCardOverallTotal();
             } else {
                 alert('Error saving quotas: ' + (data.message || 'Unknown error'));
             }
@@ -3451,71 +4171,10 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
         }
     }
 
-    // Pull Quotas from Top Panel into Overall Responses Table
-    function copyServiceQuotasFromTop() {
-        let pulledCount = 0;
-        for (let i = 1; i <= 13; i++) {
-            const val = parseInt($(`#svcQuota_${i}`).val(), 10) || 0;
-            $(`#cardTt_${i}`).val(val);
-            pulledCount += val;
-        }
-        recalcCardOverallTotal();
-        showCopyToast('Quotas Synced', `Loaded ${pulledCount.toLocaleString()} transactions into table.`);
-    }
-
-    // Save Overall Responses Table Quotas via AJAX
-    async function saveQuotasAjax(btn) {
-        const originalHtml = btn ? btn.innerHTML : '';
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = `<i class="ph-bold ph-spinner-gap spin fs-6"></i> <span>Saving...</span>`;
-        }
-
-        const targetMonth = $('input[name="quota_target_month"]').val();
-        const quotas = {};
-        let totalSum = 0;
-        $('.overall-tt-input').each(function() {
-            const idx = $(this).data('idx');
-            const val = parseInt($(this).val(), 10) || 0;
-            quotas[idx] = val;
-            totalSum += val;
-        });
-
-        try {
-            const formData = new FormData();
-            formData.append('target_month', targetMonth);
-            for (const [k, v] of Object.entries(quotas)) {
-                formData.append(`quotas[${k}]`, v);
-            }
-
-            const res = await fetch('admin_bulk.php?action=save_monthly_quotas_ajax', {
-                method: 'POST',
-                body: formData
-            });
-            const data = await res.json();
-            if (data.status === 'success') {
-                showCopyToast(
-                    'Quotas Saved',
-                    `Stored ${totalSum.toLocaleString()} total transactions for ${targetMonth}.`
-                );
-                recalcCardOverallTotal();
-            } else {
-                alert('Error saving quotas: ' + (data.message || 'Unknown error'));
-            }
-        } catch (err) {
-            alert('Network/Server error: ' + err.message);
-        } finally {
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = originalHtml;
-            }
-        }
-    }
-
-    // Initialize Service Table live counter and Overall Responses table on page load
+    // Initialize on page load
     $(document).ready(function() {
         updateSvcTableTotal();
-        recalcCardOverallTotal();
+        recalcMonthTableAnnualTotal();
     });
 
     function copyCurrentTargetMonth(btn) {
