@@ -1658,35 +1658,51 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                         </div>
                     </div>
 
-                    <!-- 13 Services Quota Grid -->
-                    <div class="row g-2.5" id="svcGridContainer">
-                        <?php foreach ($servicesMeta as $idx => $s): ?>
-                            <div class="col-lg-6 col-12">
-                                <div class="p-2.5 rounded-3 border bg-white d-flex align-items-center justify-content-between gap-2 shadow-xs svc-card-row">
-                                    <div class="d-flex align-items-center gap-2.5 text-truncate" style="min-width: 0;">
-                                        <div class="svc-icon-badge flex-shrink-0 d-flex align-items-center justify-content-center rounded-2 fw-bold" style="width:34px; height:34px; background-color: <?= $s['color'] ?>15; color: <?= $s['color'] ?>; font-size: 0.8rem;">
-                                            #<?= $idx ?>
-                                        </div>
-                                        <div class="text-truncate">
-                                            <div class="fw-bold text-dark small text-truncate" title="<?= htmlspecialchars($s['title']) ?>">
-                                                <?= htmlspecialchars($s['title']) ?>
-                                            </div>
-                                            <div class="text-muted text-truncate" style="font-size: 0.71rem;" title="<?= htmlspecialchars($s['desc']) ?>">
-                                                <?= htmlspecialchars($s['desc']) ?>
-                                            </div>
-                                        </div>
+                    <?php
+                    $renderSvcCard = function($idx, $s) {
+                    ?>
+                        <div class="p-2.5 rounded-3 border bg-white d-flex align-items-center justify-content-between gap-2 shadow-xs svc-card-row">
+                            <div class="d-flex align-items-center gap-2.5 text-truncate" style="min-width: 0;">
+                                <div class="svc-icon-badge flex-shrink-0 d-flex align-items-center justify-content-center rounded-2 fw-bold" style="width:34px; height:34px; background-color: <?= $s['color'] ?>15; color: <?= $s['color'] ?>; font-size: 0.8rem;">
+                                    #<?= $idx ?>
+                                </div>
+                                <div class="text-truncate">
+                                    <div class="fw-bold text-dark small text-truncate" title="<?= htmlspecialchars($s['title']) ?>">
+                                        <?= htmlspecialchars($s['title']) ?>
                                     </div>
-                                    <div class="d-flex align-items-center gap-2 flex-shrink-0">
-                                        <div class="input-group input-group-sm" style="width: 140px;">
-                                            <button type="button" class="btn btn-outline-secondary px-2 fw-bold" onclick="stepSvcInput(<?= $idx ?>, -10)" title="Subtract 10">-</button>
-                                            <input type="number" min="0" max="5000" class="form-control text-center fw-bold svc-quota-input" id="svcQuota_<?= $idx ?>" data-service-idx="<?= $idx ?>" data-service-name="<?= htmlspecialchars($s['name']) ?>" value="0" oninput="updateSvcTableTotal()">
-                                            <button type="button" class="btn btn-outline-secondary px-2 fw-bold" onclick="stepSvcInput(<?= $idx ?>, 10)" title="Add 10">+</button>
-                                        </div>
-                                        <span class="badge bg-light text-secondary border small svc-share-pct" id="svcShare_<?= $idx ?>" style="min-width: 44px; text-align: center;">0%</span>
+                                    <div class="text-muted text-truncate" style="font-size: 0.71rem;" title="<?= htmlspecialchars($s['desc']) ?>">
+                                        <?= htmlspecialchars($s['desc']) ?>
                                     </div>
                                 </div>
                             </div>
-                        <?php endforeach; ?>
+                            <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                                <div class="input-group input-group-sm" style="width: 140px;">
+                                    <button type="button" class="btn btn-outline-secondary px-2 fw-bold" onclick="stepSvcInput(<?= $idx ?>, -10)" title="Subtract 10">-</button>
+                                    <input type="number" min="0" max="5000" class="form-control text-center fw-bold svc-quota-input" id="svcQuota_<?= $idx ?>" data-service-idx="<?= $idx ?>" data-service-name="<?= htmlspecialchars($s['name']) ?>" value="0" oninput="updateSvcTableTotal()">
+                                    <button type="button" class="btn btn-outline-secondary px-2 fw-bold" onclick="stepSvcInput(<?= $idx ?>, 10)" title="Add 10">+</button>
+                                </div>
+                                <span class="badge bg-light text-secondary border small svc-share-pct" id="svcShare_<?= $idx ?>" style="min-width: 44px; text-align: center;">0%</span>
+                            </div>
+                        </div>
+                    <?php
+                    };
+                    ?>
+
+                    <!-- 13 Services Quota Grid: Left (1-6) and Right (7-13) -->
+                    <div class="row g-2.5" id="svcGridContainer">
+                        <!-- Left Column: Services 1 to 6 -->
+                        <div class="col-lg-6 col-12 d-flex flex-column gap-2">
+                            <?php for ($idx = 1; $idx <= 6; $idx++): 
+                                if (isset($servicesMeta[$idx])) $renderSvcCard($idx, $servicesMeta[$idx]);
+                            endfor; ?>
+                        </div>
+
+                        <!-- Right Column: Services 7 to 13 -->
+                        <div class="col-lg-6 col-12 d-flex flex-column gap-2">
+                            <?php for ($idx = 7; $idx <= 13; $idx++): 
+                                if (isset($servicesMeta[$idx])) $renderSvcCard($idx, $servicesMeta[$idx]);
+                            endfor; ?>
+                        </div>
                     </div>
 
                     <!-- Bottom Action & DB Protection Bar -->
