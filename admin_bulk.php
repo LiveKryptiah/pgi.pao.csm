@@ -1497,12 +1497,12 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
     <!-- TOPBAR -->
     <header class="topbar d-flex align-items-center justify-content-between">
         <div class="d-flex align-items-center gap-3">
-            <button id="sidebarToggle" class="btn btn-sm btn-light border p-2 rounded-3 text-muted">
+            <button id="sidebarToggle" class="btn btn-sm btn-light border p-2 rounded-3 text-muted" aria-label="Toggle navigation">
                 <i class="ph-bold ph-list fs-5"></i>
             </button>
             <div>
-                <h5 class="fw-bold mb-0 text-dark" style="font-size: 1.05rem;">Bulk Data Encoder & Generator</h5>
-                <span class="text-muted small">Batch generate synthetic citizen assessments or encode offline records</span>
+                <h5 class="fw-bold mb-0 text-dark" style="font-size: 1.05rem;">Bulk Generator &amp; Quotas</h5>
+                <span class="text-muted small">Generate survey responses and manage monthly service quotas.</span>
             </div>
         </div>
 
@@ -1531,7 +1531,7 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                 <div class="flex-grow-1 fw-semibold"><?php echo htmlspecialchars($success_msg); ?></div>
                 <?php if(!empty($last_gen_month)): ?>
                     <button type="button" class="btn btn-sm btn-success fw-bold px-3 py-1.5 rounded-3 d-inline-flex align-items-center gap-1.5 shadow-sm" onclick="copyMonthData('<?= htmlspecialchars($last_gen_month) ?>', 'data_only', this)">
-                        <i class="ph-bold ph-copy"></i> Copy <?= htmlspecialchars(date('F Y', strtotime($last_gen_month . '-01'))) ?> Data to Excel
+                        <i class="ph-bold ph-copy"></i> Copy to Excel
                     </button>
                 <?php endif; ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
@@ -1554,19 +1554,19 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                         <i class="ph-bold ph-sparkle"></i>
                     </div>
                     <div>
-                        <h6 class="card-title-clean">Assessment Generator &amp; Service Quota Insertion</h6>
-                        <span class="text-muted" style="font-size: 0.76rem;">Generate exact service quota responses or random batch assessments with prioritized 4 &amp; 5 ratings. Excludes PH holidays &amp; weekends.</span>
+                        <h6 class="card-title-clean">Assessment Generator &amp; Quotas</h6>
+                        <span class="text-muted" style="font-size: 0.78rem;">Generate sample survey responses or configure monthly service quotas. Excludes weekends and official holidays.</span>
                     </div>
                 </div>
                 
                 <div class="d-flex align-items-center gap-2 ms-auto flex-wrap">
-                    <button type="button" class="btn btn-sm btn-outline-danger rounded-3 fw-semibold py-1.5 px-3 d-inline-flex align-items-center gap-1.5" data-bs-toggle="modal" data-bs-target="#wipeMonthModal" title="Wipe bulk or all records for a specific month">
-                        <i class="ph-bold ph-calendar-x"></i> Wipe by Month
+                    <button type="button" class="btn btn-sm btn-outline-danger rounded-3 fw-semibold py-1.5 px-3 d-inline-flex align-items-center gap-1.5" data-bs-toggle="modal" data-bs-target="#wipeMonthModal" title="Wipe records for a target month">
+                        <i class="ph-bold ph-calendar-x"></i> Wipe Month
                     </button>
 
-                    <form method="POST" action="" onsubmit="return confirm('WARNING: This will permanently delete ALL fake/bulk records (control numbers starting with BLK- or ending with B) across ALL months from your database. Real citizen data will not be affected. Continue?');" style="display:inline;">
+                    <form method="POST" action="" onsubmit="return confirm('Permanently delete all generated bulk records across all months? Real citizen submissions will not be affected.');" style="display:inline;">
                         <button type="submit" name="delete_bulk_data" value="1" class="btn btn-sm btn-outline-secondary text-danger rounded-3 fw-semibold py-1.5 px-3 d-inline-flex align-items-center gap-1.5" title="Wipe all bulk records across all months">
-                            <i class="ph-bold ph-trash"></i> Wipe All Bulk
+                            <i class="ph-bold ph-trash"></i> Wipe Bulk Data
                         </button>
                     </form>
                 </div>
@@ -1577,14 +1577,14 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active fw-bold px-3 py-2 d-inline-flex align-items-center gap-2 rounded-3" id="tab-service-table-btn" data-bs-toggle="pill" data-bs-target="#tab-service-table-pane" type="button" role="tab" aria-controls="tab-service-table-pane" aria-selected="true">
                         <i class="ph-bold ph-table fs-5"></i>
-                        <span>Service Table Insertion (Exact Quotas)</span>
+                        <span>Service Quotas</span>
                         <span class="badge bg-white text-primary rounded-pill px-2 py-0.5 shadow-xs" style="font-size: 0.68rem; font-weight: 800;">Recommended</span>
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link fw-bold px-3 py-2 d-inline-flex align-items-center gap-2 rounded-3 text-secondary" id="tab-quick-random-btn" data-bs-toggle="pill" data-bs-target="#tab-quick-random-pane" type="button" role="tab" aria-controls="tab-quick-random-pane" aria-selected="false">
                         <i class="ph-bold ph-sparkle fs-5"></i>
-                        <span>Quick Random Generator</span>
+                        <span>Random Generator</span>
                     </button>
                 </li>
             </ul>
@@ -1596,32 +1596,32 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                     <!-- Row 1: Target Month, Client Type, SQD Quality, Municipality -->
                     <div class="row g-3 align-items-end pt-1">
                         <div class="col-md-3 col-sm-6">
-                            <label class="form-label text-muted small fw-bold mb-1">Target Month</label>
+                            <label class="form-label text-muted small fw-bold mb-1">Month</label>
                             <input type="month" id="svcTableMonth" class="form-control form-control-sm fw-semibold" value="<?= date('Y-m') ?>" required>
                         </div>
                         <div class="col-md-3 col-sm-6">
                             <label class="form-label text-muted small fw-bold mb-1">Client Type</label>
                             <select id="svcTableClient" class="form-select form-select-sm fw-semibold">
-                                <option value="Random" selected>🎲 Randomize (85% Citizen, 10% Business, 5% Gov)</option>
+                                <option value="Random" selected>Randomized (Weighted)</option>
                                 <option value="Citizen">Citizen Only</option>
                                 <option value="Business">Business Only</option>
                                 <option value="Government">Government Only</option>
                             </select>
                         </div>
                         <div class="col-md-3 col-sm-6">
-                            <label class="form-label text-muted small fw-bold mb-1">SQD Quality Rating</label>
+                            <label class="form-label text-muted small fw-bold mb-1">SQD Quality</label>
                             <select id="svcTableSqd" class="form-select form-select-sm fw-semibold">
-                                <option value="Prioritize45" selected>⭐ Prioritize 4 &amp; 5 (~65% 5s, ~35% 4s)</option>
-                                <option value="NaturalMix">🎲 Natural Mix (60% 5s, 35% 4s, 5% 3s)</option>
-                                <option value="Balanced45">⚖️ Balanced 4 &amp; 5 (50% 5s, 50% 4s)</option>
-                                <option value="All5">🌟 All 5s Only (100% Strongly Agree)</option>
-                                <option value="All4">👍 All 4s Only (100% Agree)</option>
+                                <option value="Prioritize45" selected>Prioritize 4 &amp; 5 (Standard)</option>
+                                <option value="NaturalMix">Natural Mix (3–5)</option>
+                                <option value="Balanced45">Balanced 4 &amp; 5</option>
+                                <option value="All5">All 5 (Strongly Agree)</option>
+                                <option value="All4">All 4 (Agree)</option>
                             </select>
                         </div>
                         <div class="col-md-3 col-sm-6">
-                            <label class="form-label text-muted small fw-bold mb-1">Municipality / City</label>
+                            <label class="form-label text-muted small fw-bold mb-1">Municipality</label>
                             <select id="svcTableMuni" class="form-select form-select-sm fw-semibold">
-                                <option value="Random" selected>🎲 Randomize (All Isabela)</option>
+                                <option value="Random" selected>All Isabela (Random)</option>
                                 <?php foreach ($isabelaLocations as $m): ?>
                                     <option value="<?php echo htmlspecialchars($m); ?>"><?php echo htmlspecialchars($m); ?></option>
                                 <?php endforeach; ?>
@@ -1632,17 +1632,17 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                     <!-- Preset & Total Quota Bar -->
                     <div class="d-flex align-items-center justify-content-between p-2.5 my-3 rounded-3 border bg-light flex-wrap gap-2">
                         <div class="d-flex align-items-center gap-2 flex-wrap">
-                            <span class="fw-bold small text-muted text-uppercase tracking-wider" style="font-size:0.7rem;">Quick Presets:</span>
-                            <button type="button" class="btn btn-sm btn-outline-primary fw-bold rounded-2 px-2.5 py-1 d-inline-flex align-items-center gap-1.5" onclick="presetExampleSvc()" title="Pre-fill user example: Transfer: 242, Certification: 443, etc.">
+                            <span class="fw-bold small text-muted text-uppercase tracking-wider" style="font-size:0.7rem;">Presets:</span>
+                            <button type="button" class="btn btn-sm btn-outline-primary fw-semibold rounded-2 px-2.5 py-1 d-inline-flex align-items-center gap-1.5" onclick="presetExampleSvc()" title="Pre-fill sample distribution">
                                 <i class="ph-bold ph-lightbulb text-warning"></i>
-                                <span>Example: 242 Transfer, 443 Cert...</span>
+                                <span>Sample Quotas</span>
                             </button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary fw-bold rounded-2 px-2.5 py-1 d-inline-flex align-items-center gap-1.5" onclick="preset500Svc()" title="Pre-fill 500 ARTA standard distribution">
+                            <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold rounded-2 px-2.5 py-1 d-inline-flex align-items-center gap-1.5" onclick="preset500Svc()" title="Pre-fill 500 standard distribution">
                                 <i class="ph-bold ph-target text-success"></i>
-                                <span>500 ARTA Standard</span>
+                                <span>500 Standard</span>
                             </button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold rounded-2 px-2 py-1 text-muted" onclick="clearAllSvcTable()" title="Reset all counts to 0">
-                                <i class="ph-bold ph-arrow-counter-clockwise"></i> Clear All (0)
+                            <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold rounded-2 px-2 py-1 text-muted" onclick="clearAllSvcTable()" title="Reset all inputs to 0">
+                                <i class="ph-bold ph-arrow-counter-clockwise"></i> Reset All
                             </button>
                         </div>
 
@@ -1651,7 +1651,7 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                                 <i class="ph-bold ph-target"></i> Target: 500 responses
                             </div>
                             <div class="d-flex align-items-center gap-1.5 bg-white border px-3 py-1 rounded-2 shadow-xs">
-                                <span class="text-muted small fw-bold">Total Quota:</span>
+                                <span class="text-muted small fw-bold">Total:</span>
                                 <span id="svcTableTotalBadge" class="fw-bolder text-primary fs-6">0</span>
                                 <span class="text-muted small">responses</span>
                             </div>
@@ -1708,56 +1708,56 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                     <!-- Bottom Action & DB Protection Bar -->
                     <div class="p-3 bg-light rounded-3 border mt-3 d-flex align-items-center justify-content-between flex-wrap gap-3">
                         <div class="d-flex align-items-center gap-3 flex-wrap">
-                            <!-- Neon Database Protection Switch -->
+                            <!-- Database Protection Switch -->
                             <div class="form-check form-switch mb-0 d-inline-flex align-items-center gap-2 bg-white px-3 py-2 rounded-3 border shadow-sm">
                                 <input class="form-check-input ms-0 mt-0" type="checkbox" id="svcTableSaveToDbToggle" style="cursor: pointer; width: 2.2em; height: 1.2em;">
                                 <label class="form-check-label fw-bold small text-dark" for="svcTableSaveToDbToggle" style="cursor: pointer;">
-                                    Save to Database (Neon)
+                                    Save to Database
                                 </label>
                             </div>
                             <div id="svcTableModeNotice" class="d-flex align-items-center gap-1.5 text-success small fw-semibold">
                                 <i class="ph-bold ph-shield-check fs-5"></i>
-                                <span>Protected: Generates in-memory for Excel copy &amp; report printing. Zero records inserted into Neon.</span>
+                                <span>In-memory mode: Generates data for export and printing without database insertion.</span>
                             </div>
                         </div>
 
                         <div class="d-flex align-items-center gap-2 flex-wrap ms-auto">
                             <!-- Action 1: Copy for Excel -->
-                            <button type="button" class="btn btn-outline-success fw-bold py-2 px-3 rounded-3 d-inline-flex align-items-center gap-2 shadow-xs" id="svcCopyExcelBtn" onclick="copyServiceTableData(this)" title="Generate exact service quota responses and copy 25 columns for cell F15">
+                            <button type="button" class="btn btn-outline-success fw-semibold py-2 px-3 rounded-3 d-inline-flex align-items-center gap-2 shadow-xs" id="svcCopyExcelBtn" onclick="copyServiceTableData(this)" title="Generate responses and copy 25 columns for cell F15">
                                 <i class="ph-bold ph-copy fs-5"></i>
-                                <span>Generate &amp; Copy for Excel</span>
+                                <span>Copy for Excel</span>
                             </button>
 
                             <!-- Action 2: Save Quotas as Digits in Database -->
-                            <button type="button" class="btn btn-outline-primary fw-bold py-2 px-3 rounded-3 d-inline-flex align-items-center gap-2 shadow-xs" id="svcSaveDigitsBtn" onclick="saveServiceTableQuotasAsDigits(this)" title="Save entered quotas as single numeric digits in database (zero fake metadata rows)">
+                            <button type="button" class="btn btn-outline-primary fw-semibold py-2 px-3 rounded-3 d-inline-flex align-items-center gap-2 shadow-xs" id="svcSaveDigitsBtn" onclick="saveServiceTableQuotasAsDigits(this)" title="Save entered quotas as single numeric digits in database">
                                 <i class="ph-bold ph-floppy-disk fs-5"></i>
-                                <span>Save Quotas as Digits (DB)</span>
+                                <span>Save Quotas to DB</span>
                             </button>
 
                             <!-- Action 3: Print Official CSM Report -->
-                            <button type="button" class="btn btn-primary fw-bold py-2 px-3 rounded-3 shadow-sm d-inline-flex align-items-center gap-2" id="svcPrintReportBtn" onclick="printServiceTableReport(this)" title="Open official 4-page ARTA CSM Report with exact tallies in new window">
+                            <button type="button" class="btn btn-primary fw-semibold py-2 px-3 rounded-3 shadow-sm d-inline-flex align-items-center gap-2" id="svcPrintReportBtn" onclick="printServiceTableReport(this)" title="Open official 4-page ARTA CSM Report in new window">
                                 <i class="ph-bold ph-printer fs-5"></i>
-                                <span>Print Official CSM Report</span>
+                                <span>Print Report</span>
                             </button>
 
                             <!-- Action 4: Save to Database (shown when toggle is ON) -->
-                            <button type="button" class="btn btn-warning fw-bold py-2 px-3 rounded-3 d-none align-items-center gap-2 shadow-sm" id="svcSaveDbBtn" onclick="saveServiceTableToDatabase(this)">
+                            <button type="button" class="btn btn-warning fw-semibold py-2 px-3 rounded-3 d-none align-items-center gap-2 shadow-sm" id="svcSaveDbBtn" onclick="saveServiceTableToDatabase(this)">
                                 <i class="ph-bold ph-cloud-arrow-up fs-5"></i>
-                                <span>Save to Neon Database</span>
+                                <span>Save to Database</span>
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- ================= TAB 2: QUICK RANDOM GENERATOR ================= -->
+                <!-- ================= TAB 2: RANDOM GENERATOR ================= -->
                 <div class="tab-pane fade" id="tab-quick-random-pane" role="tabpanel" aria-labelledby="tab-quick-random-btn">
                     <form id="generatorForm" method="POST" action="admin_bulk.php">
                         <input type="hidden" name="bulk_json" id="bulkJsonInput" value="">
                         
-                        <!-- Row 1: Target Month, Record Count, Client Type, SQD Rating Priority -->
+                        <!-- Row 1: Month, Record Count, Client Type, SQD Quality -->
                         <div class="row g-3 align-items-end pt-2">
                             <div class="col-md-3 col-sm-6">
-                                <label class="form-label text-muted small fw-bold mb-1">Target Month</label>
+                                <label class="form-label text-muted small fw-bold mb-1">Month</label>
                                 <input type="month" id="genMonth" class="form-control form-control-sm fw-semibold" value="<?= date('Y-m') ?>" required>
                             </div>
                             <div class="col-md-2 col-sm-6">
@@ -1767,30 +1767,30 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                             <div class="col-md-3 col-sm-6">
                                 <label class="form-label text-muted small fw-bold mb-1">Client Type</label>
                                 <select id="genClient" class="form-select form-select-sm fw-semibold">
-                                    <option value="Random">🎲 Randomize (Weighted)</option>
+                                    <option value="Random">Randomized (Weighted)</option>
                                     <option value="Citizen">Citizen Only</option>
                                     <option value="Business">Business Only</option>
                                     <option value="Government">Government Only</option>
                                 </select>
                             </div>
                             <div class="col-md-4 col-sm-6">
-                                <label class="form-label text-muted small fw-bold mb-1">SQD Rating (Quality)</label>
+                                <label class="form-label text-muted small fw-bold mb-1">SQD Quality</label>
                                 <select id="genSqd" class="form-select form-select-sm fw-semibold">
-                                    <option value="Prioritize45" selected>⭐ Prioritize 4 &amp; 5 (Weighted: ~65% 5s, ~35% 4s)</option>
-                                    <option value="NaturalMix">🎲 Natural Mix (60% 5s, 35% 4s, 5% 3s)</option>
-                                    <option value="Balanced45">⚖️ Balanced 4 &amp; 5 (50% 5s, 50% 4s)</option>
-                                    <option value="All5">🌟 All 5s Only (100% Strongly Agree)</option>
-                                    <option value="All4">👍 All 4s Only (100% Agree)</option>
+                                    <option value="Prioritize45" selected>Prioritize 4 &amp; 5 (Standard)</option>
+                                    <option value="NaturalMix">Natural Mix (3–5)</option>
+                                    <option value="Balanced45">Balanced 4 &amp; 5</option>
+                                    <option value="All5">All 5 (Strongly Agree)</option>
+                                    <option value="All4">All 4 (Agree)</option>
                                 </select>
                             </div>
                         </div>
 
-                        <!-- Row 2: Municipality / City & Transaction Type -->
+                        <!-- Row 2: Municipality & Transaction Type -->
                         <div class="row g-3 align-items-end pt-2 mt-0">
                             <div class="col-md-6 col-sm-12">
-                                <label class="form-label text-muted small fw-bold mb-1">Municipality / City</label>
+                                <label class="form-label text-muted small fw-bold mb-1">Municipality</label>
                                 <select id="genMuni" class="form-select form-select-sm fw-semibold">
-                                    <option value="Random">🎲 Randomize (All Isabela)</option>
+                                    <option value="Random">All Isabela (Random)</option>
                                     <?php foreach ($isabelaLocations as $m): ?>
                                         <option value="<?php echo htmlspecialchars($m); ?>"><?php echo htmlspecialchars($m); ?></option>
                                     <?php endforeach; ?>
@@ -1799,9 +1799,9 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                             <div class="col-md-6 col-sm-12">
                                 <label class="form-label text-muted small fw-bold mb-1">Transaction Type</label>
                                 <select id="genTransaction" class="form-select form-select-sm fw-semibold">
-                                    <option value="Random">🎲 Randomize (All 13 Types Evenly)</option>
-                                    <option value="RandomWeighted">🎲 Randomize (Weighted - Cert/Trans/Sub)</option>
-                                    <optgroup label="Select Specific Transaction">
+                                    <option value="Random">Randomized (All 13 Services)</option>
+                                    <option value="RandomWeighted">Weighted (Cert / Transfer / Sub)</option>
+                                    <optgroup label="Specific Service">
                                     <?php foreach ($transactionTypes as $t): ?>
                                         <option value="<?php echo htmlspecialchars($t); ?>"><?php echo htmlspecialchars($t); ?></option>
                                     <?php endforeach; ?>
@@ -1812,26 +1812,26 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
 
                         <div class="d-flex align-items-center justify-content-between pt-3 mt-3 border-top flex-wrap gap-3">
                             <div class="d-flex align-items-center gap-3 flex-wrap">
-                                <!-- Neon Database Protection Toggle Switch -->
+                                <!-- Database Protection Toggle Switch -->
                                 <div class="form-check form-switch mb-0 d-inline-flex align-items-center gap-2 bg-light px-3 py-2 rounded-3 border shadow-sm">
                                     <input class="form-check-input ms-0 mt-0" type="checkbox" id="saveToDbToggle" name="save_to_database" value="1" style="cursor: pointer; width: 2.2em; height: 1.2em;">
                                     <label class="form-check-label fw-bold small text-dark" for="saveToDbToggle" style="cursor: pointer;">
-                                        Save to Database (Neon)
+                                        Save to Database
                                     </label>
                                 </div>
                                 <div id="genModeNotice" class="d-flex align-items-center gap-1.5 text-success small fw-semibold">
                                     <i class="ph-bold ph-shield-check fs-5"></i>
-                                    <span>Protected: Generates in-memory for Excel copy. Zero records inserted into Neon.</span>
+                                    <span>In-memory mode: Generates data for export without database insertion.</span>
                                 </div>
                             </div>
                             <div class="d-flex align-items-center gap-2 flex-wrap ms-auto">
-                                <button type="button" class="btn btn-outline-success fw-bold py-2 px-3 rounded-3 d-inline-flex align-items-center gap-2" onclick="copyCurrentTargetMonth(this)" title="Copy 25-column CSM data table for selected Target Month">
+                                <button type="button" class="btn btn-outline-success fw-semibold py-2 px-3 rounded-3 d-inline-flex align-items-center gap-2" onclick="copyCurrentTargetMonth(this)" title="Copy 25-column table for selected month">
                                     <i class="ph-bold ph-copy fs-5"></i>
-                                    <span>Copy Target Month Data</span>
+                                    <span>Copy Month Data</span>
                                 </button>
-                                <button type="submit" id="generateBtn" class="btn-modern-primary py-2 px-4 fw-bold shadow-sm d-inline-flex align-items-center gap-2">
+                                <button type="submit" id="generateBtn" class="btn-modern-primary py-2 px-4 fw-semibold shadow-sm d-inline-flex align-items-center gap-2">
                                     <i id="generateBtnIcon" class="ph-bold ph-sparkle text-warning fs-5"></i>
-                                    <span id="generateBtnText">Generate &amp; Copy for Excel</span>
+                                    <span id="generateBtnText">Generate &amp; Copy</span>
                                 </button>
                             </div>
                         </div>
@@ -1848,8 +1848,8 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                         <i class="ph-bold ph-chart-bar"></i>
                     </div>
                     <div>
-                        <h6 class="card-title-clean">Overall Responses &amp; Total Transaction</h6>
-                        <span class="text-muted" style="font-size: 0.76rem;">Official ARTA CSM summary breakdown across the 13 PAO Isabela external services (Page 4 Standard).</span>
+                        <h6 class="card-title-clean">Overall Responses &amp; Transactions</h6>
+                        <span class="text-muted" style="font-size: 0.78rem;">Monthly breakdown of survey responses and transaction quotas for the 13 PAO services.</span>
                     </div>
                 </div>
 
@@ -1876,8 +1876,8 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                     </a>
 
                     <!-- Quick Action: Copy 25-Col Data Table -->
-                    <button type="button" class="btn btn-sm btn-outline-success fw-semibold rounded-3 py-1.5 px-3 d-inline-flex align-items-center gap-1.5" onclick="copyMonthData('<?= htmlspecialchars($active_rep_month) ?>', 'data_only', this)" title="Copy 25-column CSM data table for Excel">
-                        <i class="ph-bold ph-copy"></i> Copy Data Table
+                    <button type="button" class="btn btn-sm btn-outline-success fw-semibold rounded-3 py-1.5 px-3 d-inline-flex align-items-center gap-1.5" onclick="copyMonthData('<?= htmlspecialchars($active_rep_month) ?>', 'data_only', this)" title="Copy 25-column table for Excel">
+                        <i class="ph-bold ph-copy"></i> Copy Table
                     </button>
 
                     <!-- Dropdown for more options (Download CSV, Preview, Wipe Month) -->
@@ -1885,16 +1885,16 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                         <button type="button" class="btn btn-sm btn-light border rounded-3 py-1.5 px-2 text-muted" data-bs-toggle="dropdown" aria-expanded="false" title="More options">
                             <i class="ph-bold ph-dots-three-vertical fs-6"></i>
                         </button>
-                        <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1.5 rounded-3" style="min-width: 240px; font-size: 0.85rem;">
+                        <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1.5 rounded-3" style="min-width: 230px; font-size: 0.85rem;">
                             <li class="dropdown-header text-uppercase fw-bold text-muted" style="font-size: 0.68rem; letter-spacing: 0.05em;">
-                                <?= htmlspecialchars($active_month_label) ?> Actions
+                                <?= htmlspecialchars($active_month_label) ?>
                             </li>
                             <li>
                                 <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="copyMonthData('<?= htmlspecialchars($active_rep_month) ?>', 'full', this)">
                                     <i class="ph-bold ph-microsoft-excel-logo text-success fs-5"></i>
                                     <div>
-                                        <div class="fw-semibold text-dark">Copy Full Template</div>
-                                        <div class="text-muted small" style="font-size: 0.72rem;">Summary + Data (Excel)</div>
+                                        <div class="fw-semibold text-dark">Full Template</div>
+                                        <div class="text-muted small" style="font-size: 0.72rem;">Summary and data rows</div>
                                     </div>
                                 </button>
                             </li>
@@ -1902,8 +1902,8 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                                 <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="copyMonthData('<?= htmlspecialchars($active_rep_month) ?>', 'summary_only', this)">
                                     <i class="ph-bold ph-chart-bar text-warning fs-5"></i>
                                     <div>
-                                        <div class="fw-semibold text-dark">Copy Summary Tallies Only</div>
-                                        <div class="text-muted small" style="font-size: 0.72rem;">ARTA Category Breakdown</div>
+                                        <div class="fw-semibold text-dark">Summary Tallies</div>
+                                        <div class="text-muted small" style="font-size: 0.72rem;">ARTA category breakdown</div>
                                     </div>
                                 </button>
                             </li>
@@ -1911,8 +1911,8 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                                 <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="admin_bulk.php?action=download_csm_csv&month=<?= urlencode($active_rep_month) ?>">
                                     <i class="ph-bold ph-file-csv text-info fs-5"></i>
                                     <div>
-                                        <div class="fw-semibold text-dark">Download as CSV</div>
-                                        <div class="text-muted small" style="font-size: 0.72rem;">Direct spreadsheet file</div>
+                                        <div class="fw-semibold text-dark">Download CSV</div>
+                                        <div class="text-muted small" style="font-size: 0.72rem;">Spreadsheet file</div>
                                     </div>
                                 </a>
                             </li>
@@ -1920,7 +1920,7 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                                 <button class="dropdown-item d-flex align-items-center gap-2 py-2" type="button" onclick="openPreviewExportModal('<?= htmlspecialchars($active_rep_month) ?>', '<?= htmlspecialchars($active_month_label) ?>', <?= $db_active_total ?>)">
                                     <i class="ph-bold ph-eye text-secondary fs-5"></i>
                                     <div>
-                                        <div class="fw-semibold text-dark">Preview &amp; Customize</div>
+                                        <div class="fw-semibold text-dark">Preview Export</div>
                                         <div class="text-muted small" style="font-size: 0.72rem;">Inspect columns before copying</div>
                                     </div>
                                 </button>
@@ -1930,8 +1930,8 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                                 <button class="dropdown-item d-flex align-items-center gap-2 py-2 text-danger" type="button" onclick="openWipeForMonth('<?= htmlspecialchars($active_rep_month) ?>')">
                                     <i class="ph-bold ph-trash fs-5"></i>
                                     <div>
-                                        <div class="fw-semibold">Wipe Data for <?= htmlspecialchars($active_month_label) ?></div>
-                                        <div class="text-muted small" style="font-size: 0.72rem;">Bulk only or all records</div>
+                                        <div class="fw-semibold">Wipe Month Data</div>
+                                        <div class="text-muted small" style="font-size: 0.72rem;">Delete records for month</div>
                                     </div>
                                 </button>
                             </li>
@@ -1944,15 +1944,15 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
             <div class="d-flex align-items-center justify-content-between pt-2 pb-3 flex-wrap gap-2">
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <span class="pill-badge pill-slate">Month: <strong><?= htmlspecialchars($active_month_label) ?></strong></span>
-                    <span class="pill-badge pill-blue">Total Responses: <strong id="activeMonthTotalRespBadge"><?= number_format($db_active_total) ?></strong></span>
-                    <span class="pill-badge pill-emerald">Real Citizen: <strong><?= number_format($db_active_real) ?></strong></span>
+                    <span class="pill-badge pill-blue">Responses: <strong id="activeMonthTotalRespBadge"><?= number_format($db_active_total) ?></strong></span>
+                    <span class="pill-badge pill-emerald">Real: <strong><?= number_format($db_active_real) ?></strong></span>
                     <?php if ($db_active_bulk > 0): ?>
-                        <span class="pill-badge pill-amber">Bulk Staged: <strong><?= number_format($db_active_bulk) ?></strong></span>
+                        <span class="pill-badge pill-amber">Bulk: <strong><?= number_format($db_active_bulk) ?></strong></span>
                     <?php endif; ?>
                 </div>
                 <div class="text-muted small d-inline-flex align-items-center gap-1.5">
                     <i class="ph-bold ph-pencil-simple text-primary"></i>
-                    <span>"Total Transactions" values can be typed directly to match office registries</span>
+                    <span>"Total Transactions" values can be edited directly to match registry volume.</span>
                 </div>
             </div>
 
@@ -1966,10 +1966,10 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                         <thead class="table-light border-bottom">
                             <tr>
                                 <th style="width: 50px;" class="text-center">#</th>
-                                <th>External Services (PAO Isabela)</th>
-                                <th style="width: 170px;" class="text-center">Survey Responses</th>
-                                <th style="width: 200px;" class="text-center">Total Transactions (Quotas)</th>
-                                <th style="width: 110px;" class="text-center">% Share</th>
+                                <th>External Service</th>
+                                <th style="width: 170px;" class="text-center">Responses</th>
+                                <th style="width: 200px;" class="text-center">Total Transactions</th>
+                                <th style="width: 110px;" class="text-center">Share</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -2013,7 +2013,7 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                                                    style="width: 120px; font-size: 0.88rem;" 
                                                    oninput="recalcCardOverallTotal()">
                                             <?php if ($hasSavedDigit): ?>
-                                                <span class="badge bg-success-subtle text-success border border-success-subtle py-1" style="font-size: 0.65rem;" title="Official quota saved in database as single digit cell">DB</span>
+                                                <span class="badge bg-success-subtle text-success border border-success-subtle py-1" style="font-size: 0.65rem;" title="Saved in database">DB</span>
                                             <?php endif; ?>
                                         </div>
                                     </td>
@@ -2062,18 +2062,18 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                 <div class="d-flex align-items-center justify-content-between p-3 bg-light border rounded-3 mb-3 flex-wrap gap-3">
                     <div class="d-flex align-items-center gap-2 small text-muted">
                         <i class="ph-bold ph-database text-primary fs-5"></i>
-                        <span>Quotas are stored in the database as <strong>single-cell digits</strong> per service for <strong><?= htmlspecialchars($active_month_label) ?></strong> (no dummy survey rows in <code>responses</code>).</span>
+                        <span>Quotas are stored as monthly single-cell values in the database without adding artificial survey rows.</span>
                     </div>
                     <div class="d-flex align-items-center gap-2 ms-auto flex-wrap">
-                        <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold py-1.5 px-3 rounded-3 d-inline-flex align-items-center gap-1.5" onclick="copyServiceQuotasFromTop()" title="Load values entered in the top generator panel into this table">
-                            <i class="ph-bold ph-arrow-down"></i> Pull Top Quotas
+                        <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold py-1.5 px-3 rounded-3 d-inline-flex align-items-center gap-1.5" onclick="copyServiceQuotasFromTop()" title="Load values entered in the top panel into this table">
+                            <i class="ph-bold ph-arrow-down"></i> Sync from Top
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-primary fw-semibold py-1.5 px-3 rounded-3 d-inline-flex align-items-center gap-1.5" onclick="saveQuotasAjax(this)" title="Save via AJAX without page reload">
-                            <i class="ph-bold ph-lightning"></i> Quick Save (AJAX)
+                        <button type="button" class="btn btn-sm btn-outline-primary fw-semibold py-1.5 px-3 rounded-3 d-inline-flex align-items-center gap-1.5" onclick="saveQuotasAjax(this)" title="Save quotas via AJAX">
+                            <i class="ph-bold ph-lightning"></i> Quick Save
                         </button>
-                        <button type="submit" class="btn btn-sm btn-primary fw-bold py-1.5 px-3 rounded-3 shadow-sm d-inline-flex align-items-center gap-1.5" id="saveQuotasDbBtn">
+                        <button type="submit" class="btn btn-sm btn-primary fw-semibold py-1.5 px-3 rounded-3 shadow-sm d-inline-flex align-items-center gap-1.5" id="saveQuotasDbBtn">
                             <i class="ph-bold ph-floppy-disk"></i>
-                            <span>Save Quotas to Database</span>
+                            <span>Save Quotas</span>
                         </button>
                     </div>
                 </div>
@@ -2084,9 +2084,9 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
                     <button class="btn btn-sm btn-outline-secondary rounded-3 py-1.5 px-3 fw-semibold d-inline-flex align-items-center gap-1.5" type="button" data-bs-toggle="collapse" data-bs-target="#monthArchiveCollapse" aria-expanded="false" aria-controls="monthArchiveCollapse">
                         <i class="ph-bold ph-caret-down"></i>
-                        <span>View Monthly Records Archive (<?= count($month_tallies) ?> Months)</span>
+                        <span>Monthly Records Archive (<?= count($month_tallies) ?> Months)</span>
                     </button>
-                    <span class="text-muted small">Historical database counts &amp; bulk deletion management</span>
+                    <span class="text-muted small">Historical database counts and records by month.</span>
                 </div>
 
                 <div class="collapse mt-3" id="monthArchiveCollapse">
@@ -2096,10 +2096,10 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                                 <thead>
                                     <tr>
                                         <th>Target Month</th>
-                                        <th class="text-center">Bulk Generated</th>
-                                        <th class="text-center">Real Citizen</th>
-                                        <th class="text-center">Total Records</th>
-                                        <th class="text-end">Actions &amp; Export</th>
+                                        <th class="text-center">Bulk</th>
+                                        <th class="text-center">Real</th>
+                                        <th class="text-center">Total</th>
+                                        <th class="text-end">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -2118,32 +2118,32 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                                             </td>
                                             <td class="text-center">
                                                 <span class="pill-badge pill-blue fw-bold">
-                                                    <?= number_format($bulkCount) ?> records
+                                                    <?= number_format($bulkCount) ?>
                                                 </span>
                                             </td>
                                             <td class="text-center">
                                                 <span class="pill-badge pill-emerald fw-bold">
-                                                    <?= number_format($realCount) ?> records
+                                                    <?= number_format($realCount) ?>
                                                 </span>
                                             </td>
                                             <td class="text-center">
                                                 <span class="pill-badge pill-slate fw-bold">
-                                                    <?= number_format($totalCount) ?> total
+                                                    <?= number_format($totalCount) ?>
                                                 </span>
                                             </td>
                                             <td class="text-end">
                                                 <div class="d-inline-flex align-items-center gap-1.5 flex-wrap justify-content-end">
-                                                    <a href="admin_bulk.php?report_month=<?= urlencode($mt['ym']) ?>#overallResponsesCard" class="btn btn-sm btn-outline-primary rounded-3 py-1 px-2.5 d-inline-flex align-items-center gap-1 fw-semibold" title="View <?= htmlspecialchars($mt['m_label']) ?> in Overall Responses table">
+                                                    <a href="admin_bulk.php?report_month=<?= urlencode($mt['ym']) ?>#overallResponsesCard" class="btn btn-sm btn-outline-primary rounded-3 py-1 px-2.5 d-inline-flex align-items-center gap-1 fw-semibold" title="View in table">
                                                         <i class="ph-bold ph-arrow-up-right"></i> View
                                                     </a>
                                                     <button type="button" 
                                                             class="btn btn-sm btn-outline-success rounded-3 py-1 px-2.5 d-inline-flex align-items-center gap-1.5 fw-semibold" 
                                                             onclick="copyMonthData('<?= htmlspecialchars($mt['ym']) ?>', 'data_only', this)" 
-                                                            title="Copy 25-column CSM data table for <?= htmlspecialchars($mt['m_label']) ?>">
+                                                            title="Copy table">
                                                         <i class="ph-bold ph-copy fs-6"></i>
                                                         <span>Copy</span>
                                                     </button>
-                                                    <button type="button" class="btn btn-sm btn-outline-danger rounded-3 py-1 px-2 d-inline-flex align-items-center gap-1 text-danger" onclick="openWipeForMonth('<?= htmlspecialchars($mt['ym']) ?>')" title="Wipe records for <?= htmlspecialchars($mt['m_label']) ?>">
+                                                    <button type="button" class="btn btn-sm btn-outline-danger rounded-3 py-1 px-2 d-inline-flex align-items-center gap-1 text-danger" onclick="openWipeForMonth('<?= htmlspecialchars($mt['ym']) ?>')" title="Wipe month records">
                                                         <i class="ph-bold ph-trash"></i>
                                                     </button>
                                                 </div>
@@ -2170,8 +2170,8 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                         <i class="ph-bold ph-calendar-x fs-5"></i>
                     </div>
                     <div>
-                        <h5 class="modal-title fw-bold text-dark fs-6 mb-0" id="wipeMonthModalLabel">Wipe Data by Month</h5>
-                        <p class="text-muted small mb-0">Permanently delete staged or bulk records for a target month</p>
+                        <h5 class="modal-title fw-bold text-dark fs-6 mb-0" id="wipeMonthModalLabel">Wipe Month Data</h5>
+                        <p class="text-muted small mb-0">Permanently delete records for a selected month.</p>
                     </div>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -2179,7 +2179,7 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
             <form method="POST" action="" onsubmit="return confirmWipeMonth();">
                 <div class="modal-body px-4 py-3">
                     <div class="mb-3">
-                        <label class="form-label text-dark fw-bold small">Select Month with Existing Records</label>
+                        <label class="form-label text-dark fw-bold small">Month</label>
                         <select name="wipe_month" id="modalWipeMonthSelect" class="form-select fw-semibold" onchange="syncWipeMonthInput(this.value)">
                             <?php if (!empty($month_tallies)): ?>
                                 <?php foreach ($month_tallies as $mt): ?>
@@ -2194,37 +2194,37 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label text-muted small fw-bold">Or pick custom month (YYYY-MM)</label>
+                        <label class="form-label text-muted small fw-bold">Custom Month</label>
                         <input type="month" id="modalWipeMonthInput" class="form-control form-control-sm fw-semibold" value="<?= !empty($month_tallies[0]['ym']) ? htmlspecialchars($month_tallies[0]['ym']) : date('Y-m') ?>" onchange="syncWipeMonthSelect(this.value)">
                     </div>
 
                     <div class="mb-3 p-3 bg-light rounded-3 border">
-                        <label class="form-label text-dark fw-bold small mb-2">Deletion Scope</label>
+                        <label class="form-label text-dark fw-bold small mb-2">Scope</label>
                         <div class="form-check mb-2">
                             <input class="form-check-input" type="radio" name="wipe_scope" id="scopeBulkOnly" value="bulk_only" checked>
                             <label class="form-check-label text-dark small fw-semibold" for="scopeBulkOnly">
-                                <span class="d-block text-dark fw-bold">Bulk-Generated Records Only (Recommended)</span>
-                                <span class="text-muted" style="font-size: 0.8rem;">Deletes only records ending with 'B' or starting with 'BLK-'. Real citizen responses will not be touched.</span>
+                                <span class="d-block text-dark fw-bold">Bulk records only (Recommended)</span>
+                                <span class="text-muted" style="font-size: 0.8rem;">Deletes only generated bulk entries (BLK-* / *B). Real responses are kept.</span>
                             </label>
                         </div>
                         <div class="form-check mb-0">
                             <input class="form-check-input" type="radio" name="wipe_scope" id="scopeAll" value="all">
                             <label class="form-check-label text-danger small fw-semibold" for="scopeAll">
-                                <span class="d-block text-danger fw-bold">All Records for this Month</span>
-                                <span class="text-muted" style="font-size: 0.8rem;">Wipes all responses for this month, including real citizen and manual submissions.</span>
+                                <span class="d-block text-danger fw-bold">All records</span>
+                                <span class="text-muted" style="font-size: 0.8rem;">Permanently deletes all responses for this month.</span>
                             </label>
                         </div>
                     </div>
 
-                    <div class="alert alert-warning py-2.5 px-3 small d-flex align-items-center gap-2 mb-0" style="border-radius: 10px;">
+                    <div class="alert alert-warning py-2 px-3 small d-flex align-items-center gap-2 mb-0" style="border-radius: 10px;">
                         <i class="ph-bold ph-warning text-warning fs-5 flex-shrink-0"></i>
-                        <span>This action is immediate and cannot be undone. Please ensure you selected the intended month and scope.</span>
+                        <span>This action cannot be undone.</span>
                     </div>
                 </div>
                 <div class="modal-footer border-top px-4 py-3">
                     <button type="button" class="btn btn-sm btn-light border fw-semibold px-3 py-2 rounded-3" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="wipe_month_data" value="1" class="btn btn-sm btn-danger fw-bold px-4 py-2 rounded-3 d-inline-flex align-items-center gap-1.5 shadow-sm">
-                        <i class="ph-bold ph-trash"></i> Confirm & Wipe Month
+                    <button type="submit" name="wipe_month_data" value="1" class="btn btn-sm btn-danger fw-semibold px-4 py-2 rounded-3 d-inline-flex align-items-center gap-1.5 shadow-sm">
+                        <i class="ph-bold ph-trash"></i> Delete Records
                     </button>
                 </div>
             </form>
@@ -2243,10 +2243,10 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                     </div>
                     <div>
                         <h5 class="modal-title fw-bold text-dark fs-6 mb-0" id="exportPreviewModalLabel">
-                            CSM Data Table Copy & Preview (25 Columns)
+                            CSM Export Preview
                         </h5>
                         <p class="text-muted small mb-0" id="exportModalSubtitle">
-                            Data table from CSM Control No. to Suggestions/Comments formatted for Excel (Ctrl+V)
+                            Review and copy 25-column CSM data formatted for Excel.
                         </p>
                     </div>
                 </div>
@@ -2257,17 +2257,17 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                 <ul class="nav nav-pills mb-3 gap-2 border-bottom pb-2" id="exportTab" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link active rounded-pill fw-semibold py-1.5 px-3 small" id="tab-data-btn" data-bs-toggle="pill" data-bs-target="#tab-data" type="button" role="tab" onclick="switchPreviewMode('data_only')">
-                            <i class="ph-bold ph-table me-1"></i> Data Table Only (25 Columns)
+                            <i class="ph-bold ph-table me-1"></i> Data Table (25 Columns)
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link rounded-pill fw-semibold py-1.5 px-3 small" id="tab-full-btn" data-bs-toggle="pill" data-bs-target="#tab-full" type="button" role="tab" onclick="switchPreviewMode('full')">
-                            <i class="ph-bold ph-microsoft-excel-logo me-1"></i> Full Template (with Side Tallies)
+                            <i class="ph-bold ph-microsoft-excel-logo me-1"></i> Full Template
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link rounded-pill fw-semibold py-1.5 px-3 small" id="tab-summary-btn" data-bs-toggle="pill" data-bs-target="#tab-summary" type="button" role="tab" onclick="switchPreviewMode('summary_only')">
-                            <i class="ph-bold ph-chart-bar me-1"></i> ARTA Summary Breakdown
+                            <i class="ph-bold ph-chart-bar me-1"></i> Summary Tallies
                         </button>
                     </li>
                 </ul>
@@ -2277,12 +2277,12 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                     <div class="d-flex align-items-center gap-2">
                         <span class="badge bg-success-subtle text-success fw-bold px-2.5 py-1.5" id="exportModalBadgeMonth">Month</span>
                         <span class="badge bg-secondary-subtle text-secondary fw-bold px-2.5 py-1.5" id="exportModalBadgeCount">0 Records</span>
-                        <span class="text-muted small d-none d-sm-inline">Separated by Tabs (<code>\t</code>) for instant Excel column splitting</span>
+                        <span class="text-muted small d-none d-sm-inline">Separated by tabs for Excel paste</span>
                     </div>
                     <div class="form-check form-switch mb-0">
                         <input class="form-check-input" type="checkbox" id="includeHeadersToggle" onchange="toggleHeadersPreview()">
                         <label class="form-check-label small fw-semibold text-muted" for="includeHeadersToggle">
-                            Include table title row (CSM Control No., etc.)
+                            Include header row
                         </label>
                     </div>
                 </div>
@@ -2291,21 +2291,21 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
                 <div class="position-relative">
                     <div id="exportLoadingSpinner" class="text-center py-5 d-none">
                         <i class="ph-bold ph-spinner-gap spin text-primary fs-1 mb-2"></i>
-                        <p class="text-muted small fw-semibold">Preparing formatted export data...</p>
+                        <p class="text-muted small fw-semibold">Preparing export data...</p>
                     </div>
                     <textarea id="exportPreviewTextarea" class="form-control export-preview-box text-nowrap" rows="14" readonly style="resize: vertical;"></textarea>
                 </div>
             </div>
             <div class="modal-footer border-top px-4 py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <div class="text-muted small">
-                    <i class="ph-bold ph-info text-primary me-1"></i> Tip: Select cell <strong>F15</strong> in your PAO Excel template (or <strong>A1</strong> in a new sheet) before pressing <kbd>Ctrl+V</kbd>.
+                    <i class="ph-bold ph-info text-primary me-1"></i> Tip: Select cell <strong>F15</strong> in your Excel template before pressing <kbd>Ctrl+V</kbd>.
                 </div>
                 <div class="d-flex align-items-center gap-2">
                     <button type="button" class="btn btn-sm btn-light border fw-semibold px-3 py-2 rounded-3" data-bs-dismiss="modal">Close</button>
                     <a id="modalDownloadCsvBtn" href="#" class="btn btn-sm btn-outline-primary fw-semibold px-3 py-2 rounded-3 d-inline-flex align-items-center gap-1.5">
                         <i class="ph-bold ph-download-simple"></i> Download CSV
                     </a>
-                    <button type="button" id="modalCopyBtn" class="btn btn-sm btn-success fw-bold px-4 py-2 rounded-3 d-inline-flex align-items-center gap-1.5 shadow-sm" onclick="copyModalCurrentContent()">
+                    <button type="button" id="modalCopyBtn" class="btn btn-sm btn-success fw-semibold px-4 py-2 rounded-3 d-inline-flex align-items-center gap-1.5 shadow-sm" onclick="copyModalCurrentContent()">
                         <i class="ph-bold ph-copy"></i>
                         <span id="modalCopyBtnText">Copy to Clipboard</span>
                     </button>
@@ -2322,8 +2322,8 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
             <div class="toast-body d-flex align-items-center gap-2.5 py-2.5 px-3">
                 <i class="ph-bold ph-check-circle text-success fs-5"></i>
                 <div>
-                    <div class="fw-bold text-white small" id="csmCopyToastTitle">Copied to Clipboard!</div>
-                    <div class="text-white-50 small" id="csmCopyToastMsg" style="font-size: 0.78rem;">Paste into Excel with Ctrl+V</div>
+                    <div class="fw-bold text-white small" id="csmCopyToastTitle">Copied to Clipboard</div>
+                    <div class="text-white-50 small" id="csmCopyToastMsg" style="font-size: 0.78rem;">Ready to paste with Ctrl+V</div>
                 </div>
             </div>
             <button type="button" class="btn-close btn-close-white me-3 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
@@ -2658,20 +2658,20 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
         };
     }
 
-    // TOGGLE SAVE TO DATABASE (NEON) SWITCH
+    // TOGGLE SAVE TO DATABASE SWITCH
     $('#saveToDbToggle').on('change', function() {
         const isSaveToDb = $(this).is(':checked');
         if (isSaveToDb) {
-            $('#generateBtnText').text('Generate & Save to Database');
+            $('#generateBtnText').text('Generate & Save');
             $('#generateBtnIcon').removeClass('ph-sparkle text-warning').addClass('ph-cloud-arrow-up text-white');
             $('#genModeNotice').removeClass('text-success').addClass('text-warning-emphasis').html(
-                '<i class="ph-bold ph-warning fs-5 text-warning"></i> <span>Notice: Will permanently insert records into Neon cloud database.</span>'
+                '<i class="ph-bold ph-warning fs-5 text-warning"></i> <span>Database mode: Inserts generated responses into Neon database.</span>'
             );
         } else {
-            $('#generateBtnText').text('Generate & Copy for Excel');
+            $('#generateBtnText').text('Generate & Copy');
             $('#generateBtnIcon').removeClass('ph-cloud-arrow-up text-white').addClass('ph-sparkle text-warning');
             $('#genModeNotice').removeClass('text-warning-emphasis').addClass('text-success').html(
-                '<i class="ph-bold ph-shield-check fs-5"></i> <span>Protected: Generates in-memory for Excel copy. Zero records inserted into Neon.</span>'
+                '<i class="ph-bold ph-shield-check fs-5"></i> <span>In-memory mode: Generates data for export without database insertion.</span>'
             );
         }
     });
@@ -3084,15 +3084,14 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
             recalcCardOverallTotal();
         }
 
-        // ARTA 500 status indicator
+        // Target 500 status indicator
         const noticeEl = $('#svcTableArtaNotice');
         if (total >= 500) {
-            noticeEl.html(`<span class="text-success fw-bold"><i class="ph-bold ph-check-circle"></i> Meets ARTA Standard (${total.toLocaleString()} / 500 minimum)</span>`);
+            noticeEl.html(`<span class="text-success fw-bold"><i class="ph-bold ph-check-circle"></i> Meets Target (${total.toLocaleString()} / 500)</span>`);
         } else if (total > 0) {
-            const diff = 500 - total;
-            noticeEl.html(`<span class="text-warning-emphasis fw-bold"><i class="ph-bold ph-info"></i> ${total.toLocaleString()} responses (Add ${diff.toLocaleString()} to reach 500 ARTA target)</span>`);
+            noticeEl.html(`<span class="text-warning-emphasis fw-bold"><i class="ph-bold ph-info"></i> ${total.toLocaleString()} responses (Target: 500)</span>`);
         } else {
-            noticeEl.html(`<span class="text-muted"><i class="ph-bold ph-target"></i> Target: 500 responses for official ARTA submission</span>`);
+            noticeEl.html(`<span class="text-muted"><i class="ph-bold ph-target"></i> Target: 500 responses</span>`);
         }
     }
 
@@ -3126,51 +3125,27 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
     }
 
     function presetExampleSvc() {
-        // User example: Transfer 242, Certification 443, and PAO services
         const exampleCounts = {
-            1: 242, // Transfer
-            2: 35,  // Subdivision/Consolidation
-            3: 10,  // Reclassification (Agri to Urban)
-            4: 8,   // Reclassification (Urban to Urban)
-            5: 18,  // Reassessment (DP/PC/DT)
-            6: 12,  // Discovery/New Declaration
-            7: 443, // Certification/CTC/CPC
-            8: 22,  // Verification/Back Tracking
-            9: 9,   // Annotation/Cancellation
-            10: 6,  // Ocular Inspection
-            11: 4,  // Cancellation of TD
-            12: 11, // TMCR/Section Maps
-            13: 5   // Posting
+            1: 242, 2: 35, 3: 10, 4: 8, 5: 18, 6: 12, 7: 443,
+            8: 22, 9: 9, 10: 6, 11: 4, 12: 11, 13: 5
         };
         for (let i = 1; i <= 13; i++) {
             $(`#svcQuota_${i}`).val(exampleCounts[i] || 0);
         }
         updateSvcTableTotal();
-        showCopyToast('Example Preset Loaded!', 'Transfer: 242, Certification: 443, and other services (Total: 825 responses).');
+        showCopyToast('Preset Loaded', 'Sample distribution applied (825 responses).');
     }
 
     function preset500Svc() {
-        // Official 500 ARTA standard distribution
         const artaCounts = {
-            1: 140, // Transfer
-            2: 45,  // Subdivision/Consolidation
-            3: 6,   // Reclassification (Agri to Urban)
-            4: 5,   // Reclassification (Urban to Urban)
-            5: 25,  // Reassessment (DP/PC/DT)
-            6: 10,  // Discovery/New Declaration
-            7: 230, // Certification/CTC/CPC
-            8: 20,  // Verification/Back Tracking
-            9: 7,   // Annotation/Cancellation
-            10: 3,  // Ocular Inspection
-            11: 2,  // Cancellation of TD
-            12: 5,  // TMCR/Section Maps
-            13: 2   // Posting
+            1: 140, 2: 45, 3: 6, 4: 5, 5: 25, 6: 10, 7: 230,
+            8: 20, 9: 7, 10: 3, 11: 2, 12: 5, 13: 2
         };
         for (let i = 1; i <= 13; i++) {
             $(`#svcQuota_${i}`).val(artaCounts[i] || 0);
         }
         updateSvcTableTotal();
-        showCopyToast('500 ARTA Standard Loaded!', 'Standard PAO Isabela service distribution totaling exactly 500 responses.');
+        showCopyToast('Preset Loaded', 'Standard distribution applied (500 responses).');
     }
 
     function clearAllSvcTable() {
@@ -3197,12 +3172,12 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
         if (isSaveToDb) {
             $('#svcSaveDbBtn').removeClass('d-none').addClass('d-inline-flex');
             $('#svcTableModeNotice').removeClass('text-success').addClass('text-warning-emphasis').html(
-                '<i class="ph-bold ph-warning fs-5 text-warning"></i> <span>Notice: Will permanently insert records into Neon cloud database.</span>'
+                '<i class="ph-bold ph-warning fs-5 text-warning"></i> <span>Database mode: Inserts generated responses into Neon database.</span>'
             );
         } else {
             $('#svcSaveDbBtn').addClass('d-none').removeClass('d-inline-flex');
             $('#svcTableModeNotice').removeClass('text-warning-emphasis').addClass('text-success').html(
-                '<i class="ph-bold ph-shield-check fs-5"></i> <span>Protected: Generates in-memory for Excel copy &amp; report printing. Zero records inserted into Neon.</span>'
+                '<i class="ph-bold ph-shield-check fs-5"></i> <span>In-memory mode: Generates data for export and printing without database insertion.</span>'
             );
         }
     });
@@ -3342,8 +3317,8 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
             await copyToClipboard(virtualExport.tsv_data_only);
             const firstRowSample = (virtualExport.tsv_data_only.split('\n')[0] || '').split('\t')[0] || 'E10-001';
             showCopyToast(
-                `Generated & Copied ${totalCount} Records (${virtualExport.month_label})!`,
-                `Ready to paste into cell F15 in Excel (starts with ${firstRowSample}). Zero records inserted into Neon.`
+                'Copied to Clipboard',
+                `${totalCount} records formatted for cell F15 (${virtualExport.month_label}).`
             );
         } catch (copyErr) {
             console.error('Clipboard copy error:', copyErr);
@@ -3394,8 +3369,8 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
         setTimeout(() => form.remove(), 1000);
 
         showCopyToast(
-            `Generated Official CSM Report (${totalCount} Records)!`,
-            `Opening official 4-page ARTA report for ${monthVal} in a new tab with exact service tallies.`
+            'Report Generated',
+            `Official CSM report opened for ${monthVal} (${totalCount} records).`
         );
     }
 
@@ -3438,7 +3413,7 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
         const originalHtml = btn ? btn.innerHTML : '';
         if (btn) {
             btn.disabled = true;
-            btn.innerHTML = `<i class="ph-bold ph-spinner-gap spin fs-5"></i> <span>Saving ${totalCount.toLocaleString()} as Digits...</span>`;
+            btn.innerHTML = `<i class="ph-bold ph-spinner-gap spin fs-5"></i> <span>Saving Quotas...</span>`;
         }
 
         try {
@@ -3455,8 +3430,8 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
             const data = await res.json();
             if (data.status === 'success') {
                 showCopyToast(
-                    `Saved Quotas to Database (${monthVal})!`,
-                    `Stored ${totalCount.toLocaleString()} total transactions as single-cell digits in database (zero dummy survey metadata).`
+                    'Quotas Saved',
+                    `Stored ${totalCount.toLocaleString()} total transactions for ${monthVal}.`
                 );
                 // Sync with overall responses table below
                 for (let i = 1; i <= 13; i++) {
@@ -3485,7 +3460,7 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
             pulledCount += val;
         }
         recalcCardOverallTotal();
-        showCopyToast('Pulled from Top Quotas!', `Loaded ${pulledCount.toLocaleString()} total transactions into the table. Click "Save Quotas to Database" to commit.`);
+        showCopyToast('Quotas Synced', `Loaded ${pulledCount.toLocaleString()} transactions into table.`);
     }
 
     // Save Overall Responses Table Quotas via AJAX
@@ -3520,8 +3495,8 @@ $active_month_label = date('F Y', strtotime($active_rep_month . '-01'));
             const data = await res.json();
             if (data.status === 'success') {
                 showCopyToast(
-                    `Saved Quotas for ${targetMonth}!`,
-                    `Stored ${totalSum.toLocaleString()} total transactions as digits in database table (single data cells; zero dummy rows).`
+                    'Quotas Saved',
+                    `Stored ${totalSum.toLocaleString()} total transactions for ${targetMonth}.`
                 );
                 recalcCardOverallTotal();
             } else {
