@@ -448,11 +448,11 @@ $h = function($s){ return htmlspecialchars((string)$s); };
     <button onclick="window.print()">Print / Save as PDF</button>
     <span class="hint">
         <?php if ($is_custom_dataset): ?>
-            <span style="color:#a78bfa;font-weight:700;">Service Table Quotas:</span> <strong><?= number_format($total) ?></strong> custom responses (100% In-Memory · Zero Neon DB Inserts)
+            <span style="color:#a78bfa;font-weight:700;">Service Table Quotas:</span> <strong><?= number_format($total) ?></strong> custom responses (100% In-Memory · Zero Local DB Inserts)
         <?php elseif ($dummy_count > 0): ?>
-            <span style="color:#34d399;font-weight:700;">Combined Report:</span> <strong><?= number_format($total) ?></strong> responses (<strong><?= number_format($real_count) ?></strong> Real + <strong><?= number_format($dummy_count) ?></strong> In-Memory Synthetic · Zero Neon DB Inserts)
+            <span style="color:#34d399;font-weight:700;">Combined Report:</span> <strong><?= number_format($total) ?></strong> responses (<strong><?= number_format($real_count) ?></strong> Real + <strong><?= number_format($dummy_count) ?></strong> In-Memory Synthetic · Zero Local DB Inserts)
         <?php else: ?>
-            <span style="color:#93c5fd;font-weight:700;">Real Data Only:</span> <strong><?= number_format($total) ?></strong> responses from Neon DB
+            <span style="color:#93c5fd;font-weight:700;">Real Data Only:</span> <strong><?= number_format($total) ?></strong> responses from Local DB
         <?php endif; ?>
         · Click Letter / Total Transactions cells to edit before printing
     </span>

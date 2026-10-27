@@ -949,7 +949,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_month_breakdown_ajax') {
 // 3. HANDLE BULK SUBMISSION (Single JSON payload bypasses PHP max_input_vars limit entirely)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['bulk_json']) || isset($_POST['survey_date']))) {
     if (empty($_POST['save_to_database'])) {
-        $error_msg = "Database insert was skipped because 'Save to Database (Neon)' was disabled.";
+        $error_msg = "Database insert was skipped because 'Save to Local Database' was disabled.";
     } else {
         try {
         $records = [];
@@ -3092,7 +3092,7 @@ for ($m = 1; $m <= 12; $m++) {
             $('#generateBtnText').text('Generate & Save');
             $('#generateBtnIcon').removeClass('ph-sparkle text-warning').addClass('ph-cloud-arrow-up text-white');
             $('#genModeNotice').removeClass('text-success').addClass('text-warning-emphasis').html(
-                '<i class="ph-bold ph-warning fs-5 text-warning"></i> <span>Database mode: Inserts generated responses into Neon database.</span>'
+                '<i class="ph-bold ph-warning fs-5 text-warning"></i> <span>Database mode: Inserts generated responses into Local Database.</span>'
             );
         } else {
             $('#generateBtnText').text('Generate & Copy');
@@ -3202,7 +3202,7 @@ for ($m = 1; $m <= 12; $m++) {
             const firstRowSample = (virtualExport.tsv_data_only.split('\n')[0] || '').split('\t')[0] || 'E10-001';
             showCopyToast(
                 `Generated & Copied ${count} Records (${virtualExport.month_label})!`,
-                `Ready to paste into cell F15 in Excel (starts with ${firstRowSample}). Zero records inserted into Neon.`
+                `Ready to paste into cell F15 in Excel (starts with ${firstRowSample}). Zero records inserted into Local Database.`
             );
         } catch (copyErr) {
             console.error('Clipboard copy error:', copyErr);
@@ -3604,7 +3604,7 @@ for ($m = 1; $m <= 12; $m++) {
         if (isSaveToDb) {
             $('#svcSaveDbBtn').removeClass('d-none').addClass('d-inline-flex');
             $('#svcTableModeNotice').removeClass('text-success').addClass('text-warning-emphasis').html(
-                '<i class="ph-bold ph-warning fs-5 text-warning"></i> <span>Database mode: Inserts generated responses into Neon database.</span>'
+                '<i class="ph-bold ph-warning fs-5 text-warning"></i> <span>Database mode: Inserts generated responses into Local Database.</span>'
             );
         } else {
             $('#svcSaveDbBtn').addClass('d-none').removeClass('d-inline-flex');
@@ -3729,7 +3729,7 @@ for ($m = 1; $m <= 12; $m++) {
         const isSaveToDb = $('#svcTableSaveToDbToggle').is(':checked');
 
         if (isSaveToDb) {
-            if (!confirm(`Save to Database is ENABLED. This will permanently insert ${totalCount} records into your Neon cloud database. Proceed?`)) {
+            if (!confirm(`Save to Database is ENABLED. This will permanently insert ${totalCount} records into your Local Database. Proceed?`)) {
                 return;
             }
             $('#bulkJsonInput').val(JSON.stringify(records));
@@ -3811,7 +3811,7 @@ for ($m = 1; $m <= 12; $m++) {
         if (!genData) return;
 
         const { records, totalCount } = genData;
-        if (!confirm(`Are you sure you want to permanently insert ${totalCount} records into your Neon cloud database?`)) {
+        if (!confirm(`Are you sure you want to permanently insert ${totalCount} records into your Local Database?`)) {
             return;
         }
 

@@ -1,39 +1,37 @@
 @echo off
 cd /d "%~dp0"
-title CSM Private Office Server + Database (Port 8000)
+title CSM Private Office Server + Local Database (Port 8000)
 
 echo ========================================================
 echo   CSM (Client Satisfaction Measurement) - Isabela
-echo   Provincial Assessor's Office
+echo   Provincial Assessor's Office (Local Office Server)
 echo ========================================================
 echo.
 
 echo Checking and freeing port 8000...
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8000 ^| findstr LISTENING') do taskkill /f /pid %%a >nul 2>&1
 
-:: Check if MySQL/MariaDB is listening on port 3306
+:: Ensure Local MySQL Database Server is running on port 3306
 netstat -ano | findstr :3306 | findstr LISTENING >nul
 if %errorlevel% neq 0 (
-    if exist "C:\Users\user\mysql8\bin\mysqld.exe" (
-        echo [INFO] Starting local MySQL server on port 3306...
-        powershell -WindowStyle Hidden -Command "Start-Process 'C:\Users\user\mysql8\bin\mysqld.exe' -WorkingDirectory 'C:\Users\user\mysql8' -WindowStyle Hidden"
-        timeout /t 3 /nobreak >nul
-        netstat -ano | findstr :3306 | findstr LISTENING >nul
-        if %errorlevel% neq 0 (
-            echo [INFO] Local MySQL not active; using Neon Cloud PostgreSQL database.
-        ) else (
-            echo [OK] Local MySQL started on port 3306.
-        )
+    echo [INFO] Starting local MySQL database server on port 3306...
+    powershell -WindowStyle Hidden -Command "Start-Process 'C:\Users\user\mysql8\bin\mysqld.exe' -WorkingDirectory 'C:\Users\user\mysql8' -WindowStyle Hidden"
+    timeout /t 3 /nobreak >nul
+    netstat -ano | findstr :3306 | findstr LISTENING >nul
+    if %errorlevel% neq 0 (
+        echo [ERROR] Could not start local MySQL automatically.
+        echo Please verify C:\Users\user\mysql8\bin\mysqld.exe exists.
     ) else (
-        echo [OK] Using Neon Cloud PostgreSQL database.
+        echo [OK] Local MySQL database (csm_isabela) started on port 3306.
     )
 ) else (
-    echo [OK] MySQL is already active on port 3306.
+    echo [OK] Local MySQL database (csm_isabela) is active on port 3306.
 )
 
 echo.
 echo ========================================================
 echo   OFFICE NETWORK CONNECTIONS FOR CO-WORKERS
+echo   (All co-workers share your PC's local database)
 echo ========================================================
 echo   Your PC has two office network connections:
 echo.

@@ -286,7 +286,7 @@ $url_local = "http://localhost{$diag_port_str}/index.php";
         </div>
 
         <!-- Database Test -->
-        <h6 class="fw-bold small text-muted text-uppercase mb-2">2. Database Connection Test:</h6>
+        <h6 class="fw-bold small text-muted text-uppercase mb-2">2. Local Database Connection Test (csm_isabela):</h6>
         <div class="mb-3">
             <?php
             try {
@@ -294,7 +294,7 @@ $url_local = "http://localhost{$diag_port_str}/index.php";
                 if (isset($pdo) && $pdo) {
                     $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
                     $count = $pdo->query("SELECT count(*) FROM responses")->fetchColumn();
-                    echo "<div class='text-success small fw-semibold'><i class='ph-bold ph-check-circle me-1'></i> Database Connected via '$driver'! Total responses recorded: " . number_format($count) . "</div>";
+                    echo "<div class='text-success small fw-semibold'><i class='ph-bold ph-check-circle me-1'></i> Local Database Connected via '$driver' (csm_isabela)! Total responses recorded: " . number_format($count) . "</div>";
                 } else {
                     echo "<div class='text-danger small fw-semibold'><i class='ph-bold ph-x-circle me-1'></i> Database connection object (\$pdo) not initialized.</div>";
                 }
@@ -307,8 +307,8 @@ $url_local = "http://localhost{$diag_port_str}/index.php";
         <!-- Modules -->
         <h6 class="fw-bold small text-muted text-uppercase mb-2">3. PHP Modules:</h6>
         <div class="small text-secondary">
-            <strong>pdo_pgsql:</strong> <?= extension_loaded('pdo_pgsql') ? 'YES' : 'NO' ?> &bull;
             <strong>pdo_mysql:</strong> <?= extension_loaded('pdo_mysql') ? 'YES' : 'NO' ?> &bull;
+            <strong>mysqli:</strong> <?= extension_loaded('mysqli') ? 'YES' : 'NO' ?> &bull;
             <strong>mbstring:</strong> <?= extension_loaded('mbstring') ? 'YES' : 'NO' ?> &bull;
             <strong>PHP Version:</strong> <?= phpversion() ?>
         </div>
