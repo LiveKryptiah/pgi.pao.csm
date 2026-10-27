@@ -186,31 +186,32 @@ foreach ($responses as $row) {
     // TRANSACTION NORMALIZATION (Mapping to the 13 official service transactions)
     $raw_trans = isset($row['transaction_type']) && !empty(trim($row['transaction_type'])) ? trim($row['transaction_type']) : 'Unspecified';
     $trans = $raw_trans;
-    if (stripos($raw_trans, 'reassessment') !== false) {
+    // Check Certification BEFORE Reassessment to avoid acronym collision (e.g. CPC containing 'pc')
+    if (stripos($raw_trans, 'certification') !== false || stripos($raw_trans, 'certificate') !== false || stripos($raw_trans, 'ctc') !== false || stripos($raw_trans, 'cpc') !== false || stripos($raw_trans, 'photocopy') !== false || stripos($raw_trans, 'sertipikasyon') !== false) {
+        $trans = 'Certification/CTC/CPC';
+    } elseif (stripos($raw_trans, 'reassessment') !== false || stripos($raw_trans, 'dp/pc/dt') !== false || stripos($raw_trans, 'dp / pc / dt') !== false || preg_match('/\b(dp|pc|dt)\b/i', $raw_trans) || stripos($raw_trans, 'tasasyon') !== false) {
         $trans = 'Reassessment (DP/PC/DT)';
     } elseif (stripos($raw_trans, 'urban to urban') !== false) {
         $trans = 'Reclassification (Urban to Urban)';
     } elseif (stripos($raw_trans, 'agri to urban') !== false || stripos($raw_trans, 'agrikultural') !== false) {
         $trans = 'Reclassification (Agri to Urban)';
-    } elseif (stripos($raw_trans, 'subdivision') !== false || stripos($raw_trans, 'consolidation') !== false) {
+    } elseif (stripos($raw_trans, 'subdivision') !== false || stripos($raw_trans, 'consolidation') !== false || stripos($raw_trans, 'paghati') !== false) {
         $trans = 'Subdivision/Consolidation';
-    } elseif (stripos($raw_trans, 'annotation') !== false) {
+    } elseif (stripos($raw_trans, 'annotation') !== false || stripos($raw_trans, 'anotasyon') !== false) {
         $trans = 'Annotation/Cancellation of Annotation';
-    } elseif (stripos($raw_trans, 'tmcr') !== false || stripos($raw_trans, 'section map') !== false) {
+    } elseif (stripos($raw_trans, 'tmcr') !== false || stripos($raw_trans, 'section map') !== false || stripos($raw_trans, 'map') !== false) {
         $trans = 'TMCR/Section Map/s';
-    } elseif (stripos($raw_trans, 'cancellation of td') !== false) {
+    } elseif (stripos($raw_trans, 'cancellation of td') !== false || (stripos($raw_trans, 'cancellation') !== false && stripos($raw_trans, 'td') !== false) || (stripos($raw_trans, 'kanselasyon') !== false && stripos($raw_trans, 'td') !== false)) {
         $trans = 'Cancellation of TD';
-    } elseif (stripos($raw_trans, 'ocular') !== false) {
+    } elseif (stripos($raw_trans, 'ocular') !== false || stripos($raw_trans, 'inspeksyon') !== false) {
         $trans = 'Ocular Inspection';
-    } elseif (stripos($raw_trans, 'discovery') !== false) {
+    } elseif (stripos($raw_trans, 'discovery') !== false || stripos($raw_trans, 'new declaration') !== false || stripos($raw_trans, 'bagong deklarasyon') !== false) {
         $trans = 'Discovery/New Declaration';
-    } elseif (stripos($raw_trans, 'certification') !== false || stripos($raw_trans, 'certificate') !== false || stripos($raw_trans, 'ctc') !== false) {
-        $trans = 'Certification/CTC/CPC';
-    } elseif (stripos($raw_trans, 'verification') !== false || stripos($raw_trans, 'back tracking') !== false) {
+    } elseif (stripos($raw_trans, 'verification') !== false || stripos($raw_trans, 'back tracking') !== false || stripos($raw_trans, 'back tracing') !== false || stripos($raw_trans, 'tracking') !== false || stripos($raw_trans, 'tracing') !== false) {
         $trans = 'Verification/Back Tracking';
-    } elseif (stripos($raw_trans, 'posting') !== false) {
+    } elseif (stripos($raw_trans, 'posting') !== false || stripos($raw_trans, 'pag-post') !== false) {
         $trans = 'Posting';
-    } elseif (stripos($raw_trans, 'transfer') !== false) {
+    } elseif (stripos($raw_trans, 'transfer') !== false || stripos($raw_trans, 'paglilipat') !== false || stripos($raw_trans, 'lipat') !== false) {
         $trans = 'Transfer';
     }
 

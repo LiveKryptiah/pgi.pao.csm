@@ -257,20 +257,22 @@ function norm_cc3($v) {
     return 0;
 }
 function norm_trans($v) {
-    $v = strtolower((string)$v);
-    if (strpos($v, 'agri') !== false) return 3;
-    if (strpos($v, 'urban to urban') !== false || strpos($v, 'reclassification') !== false) return 4;
-    if (strpos($v, 'subdivision') !== false) return 2;
-    if (strpos($v, 'transfer') !== false) return 1;
-    if (strpos($v, 'reassessment') !== false) return 5;
-    if (strpos($v, 'discovery') !== false) return 6;
-    if (strpos($v, 'certification') !== false) return 7;
-    if (strpos($v, 'verification') !== false) return 8;
-    if (strpos($v, 'annotation') !== false) return 9;
-    if (strpos($v, 'ocular') !== false) return 10;
-    if (strpos($v, 'cancellation of td') !== false) return 11;
-    if (strpos($v, 'tmcr') !== false || strpos($v, 'section map') !== false) return 12;
-    if (strpos($v, 'posting') !== false) return 13;
+    $t = strtolower(trim((string)$v));
+    if ($t === '') return 0;
+    if (strpos($t, 'transfer') !== false || strpos($t, 'paglilipat') !== false || strpos($t, 'lipat') !== false) return 1;
+    if (strpos($t, 'subdivision') !== false || strpos($t, 'consolidation') !== false || strpos($t, 'paghati') !== false) return 2;
+    if (strpos($t, 'agri to urban') !== false || strpos($t, 'agrikultural') !== false) return 3;
+    if (strpos($t, 'urban to urban') !== false || (strpos($t, 'reclassification') !== false && strpos($t, 'agri') === false)) return 4;
+    // Check Certification (7) BEFORE Reassessment (5) to avoid acronym collision (e.g. CPC containing 'pc')
+    if (strpos($t, 'certification') !== false || strpos($t, 'ctc') !== false || strpos($t, 'cpc') !== false || strpos($t, 'photocopy') !== false || strpos($t, 'certificate') !== false || strpos($t, 'sertipikasyon') !== false) return 7;
+    if (strpos($t, 'reassessment') !== false || strpos($t, 'dp/pc/dt') !== false || strpos($t, 'dp / pc / dt') !== false || preg_match('/\b(dp|pc|dt)\b/i', $t) || strpos($t, 'tasasyon') !== false) return 5;
+    if (strpos($t, 'discovery') !== false || strpos($t, 'new declaration') !== false || strpos($t, 'bagong deklarasyon') !== false) return 6;
+    if (strpos($t, 'verification') !== false || strpos($t, 'back tracking') !== false || strpos($t, 'back tracing') !== false || strpos($t, 'tracking') !== false || strpos($t, 'tracing') !== false || strpos($t, 'pagberipika') !== false) return 8;
+    if (strpos($t, 'annotation') !== false || strpos($t, 'anotasyon') !== false) return 9;
+    if (strpos($t, 'ocular') !== false || strpos($t, 'inspeksyon') !== false) return 10;
+    if (strpos($t, 'cancellation of td') !== false || (strpos($t, 'cancellation') !== false && strpos($t, 'td') !== false) || (strpos($t, 'kanselasyon') !== false && strpos($t, 'td') !== false)) return 11;
+    if (strpos($t, 'tmcr') !== false || strpos($t, 'section map') !== false || strpos($t, 'map') !== false) return 12;
+    if (strpos($t, 'posting') !== false || strpos($t, 'pag-post') !== false) return 13;
     return 0;
 }
 function norm_sqd($v) {

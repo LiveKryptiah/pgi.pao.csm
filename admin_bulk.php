@@ -188,19 +188,21 @@ function buildCsmExportData($pdo, $month) {
 
     $map_service = function($trans) {
         $t = strtolower(trim($trans ?? ''));
-        if (strpos($t, 'transfer') !== false) return 1;
-        if (strpos($t, 'subdivision') !== false || strpos($t, 'consolidation') !== false) return 2;
-        if (strpos($t, 'agri to urban') !== false) return 3;
-        if (strpos($t, 'urban to urban') !== false) return 4;
-        if (strpos($t, 'reassessment') !== false || strpos($t, 'dp') !== false || strpos($t, 'pc') !== false) return 5;
-        if (strpos($t, 'discovery') !== false || strpos($t, 'declaration') !== false) return 6;
-        if (strpos($t, 'certification') !== false || strpos($t, 'ctc') !== false || strpos($t, 'cpc') !== false || strpos($t, 'photocopy') !== false || strpos($t, 'certificate') !== false) return 7;
-        if (strpos($t, 'verification') !== false || strpos($t, 'back') !== false || strpos($t, 'tracking') !== false || strpos($t, 'tracing') !== false) return 8;
-        if (strpos($t, 'annotation') !== false) return 9;
-        if (strpos($t, 'ocular') !== false) return 10;
-        if (strpos($t, 'cancellation of td') !== false) return 11;
-        if (strpos($t, 'tmcr') !== false || strpos($t, 'map') !== false) return 12;
-        if (strpos($t, 'posting') !== false) return 13;
+        if ($t === '') return 7;
+        if (strpos($t, 'transfer') !== false || strpos($t, 'paglilipat') !== false || strpos($t, 'lipat') !== false) return 1;
+        if (strpos($t, 'subdivision') !== false || strpos($t, 'consolidation') !== false || strpos($t, 'paghati') !== false) return 2;
+        if (strpos($t, 'agri to urban') !== false || strpos($t, 'agrikultural') !== false) return 3;
+        if (strpos($t, 'urban to urban') !== false || (strpos($t, 'reclassification') !== false && strpos($t, 'agri') === false)) return 4;
+        // Check Certification (7) BEFORE Reassessment (5) to avoid acronym collision (e.g. CPC containing 'pc')
+        if (strpos($t, 'certification') !== false || strpos($t, 'ctc') !== false || strpos($t, 'cpc') !== false || strpos($t, 'photocopy') !== false || strpos($t, 'certificate') !== false || strpos($t, 'sertipikasyon') !== false) return 7;
+        if (strpos($t, 'reassessment') !== false || strpos($t, 'dp/pc/dt') !== false || strpos($t, 'dp / pc / dt') !== false || preg_match('/\b(dp|pc|dt)\b/i', $t) || strpos($t, 'tasasyon') !== false) return 5;
+        if (strpos($t, 'discovery') !== false || strpos($t, 'new declaration') !== false || strpos($t, 'bagong deklarasyon') !== false) return 6;
+        if (strpos($t, 'verification') !== false || strpos($t, 'back tracking') !== false || strpos($t, 'back tracing') !== false || strpos($t, 'tracking') !== false || strpos($t, 'tracing') !== false || strpos($t, 'pagberipika') !== false) return 8;
+        if (strpos($t, 'annotation') !== false || strpos($t, 'anotasyon') !== false) return 9;
+        if (strpos($t, 'ocular') !== false || strpos($t, 'inspeksyon') !== false) return 10;
+        if (strpos($t, 'cancellation of td') !== false || (strpos($t, 'cancellation') !== false && strpos($t, 'td') !== false) || (strpos($t, 'kanselasyon') !== false && strpos($t, 'td') !== false)) return 11;
+        if (strpos($t, 'tmcr') !== false || strpos($t, 'section map') !== false || strpos($t, 'map') !== false) return 12;
+        if (strpos($t, 'posting') !== false || strpos($t, 'pag-post') !== false) return 13;
         return 7;
     };
 
@@ -1063,20 +1065,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['bulk_json']) || iss
 
 // Normalizer for transaction types to service indices 1-13
 function norm_trans_php($v) {
-    $v = strtolower((string)$v);
-    if (strpos($v, 'agri') !== false) return 3;
-    if (strpos($v, 'urban to urban') !== false || strpos($v, 'reclassification') !== false) return 4;
-    if (strpos($v, 'subdivision') !== false) return 2;
-    if (strpos($v, 'transfer') !== false) return 1;
-    if (strpos($v, 'reassessment') !== false) return 5;
-    if (strpos($v, 'discovery') !== false) return 6;
-    if (strpos($v, 'certification') !== false) return 7;
-    if (strpos($v, 'verification') !== false) return 8;
-    if (strpos($v, 'annotation') !== false) return 9;
-    if (strpos($v, 'ocular') !== false) return 10;
-    if (strpos($v, 'cancellation of td') !== false) return 11;
-    if (strpos($v, 'tmcr') !== false || strpos($v, 'section map') !== false) return 12;
-    if (strpos($v, 'posting') !== false) return 13;
+    $t = strtolower(trim((string)$v));
+    if ($t === '') return 7;
+    if (strpos($t, 'transfer') !== false || strpos($t, 'paglilipat') !== false || strpos($t, 'lipat') !== false) return 1;
+    if (strpos($t, 'subdivision') !== false || strpos($t, 'consolidation') !== false || strpos($t, 'paghati') !== false) return 2;
+    if (strpos($t, 'agri to urban') !== false || strpos($t, 'agrikultural') !== false) return 3;
+    if (strpos($t, 'urban to urban') !== false || (strpos($t, 'reclassification') !== false && strpos($t, 'agri') === false)) return 4;
+    // Check Certification (7) BEFORE Reassessment (5) to avoid acronym collision (e.g. CPC containing 'pc')
+    if (strpos($t, 'certification') !== false || strpos($t, 'ctc') !== false || strpos($t, 'cpc') !== false || strpos($t, 'photocopy') !== false || strpos($t, 'certificate') !== false || strpos($t, 'sertipikasyon') !== false) return 7;
+    if (strpos($t, 'reassessment') !== false || strpos($t, 'dp/pc/dt') !== false || strpos($t, 'dp / pc / dt') !== false || preg_match('/\b(dp|pc|dt)\b/i', $t) || strpos($t, 'tasasyon') !== false) return 5;
+    if (strpos($t, 'discovery') !== false || strpos($t, 'new declaration') !== false || strpos($t, 'bagong deklarasyon') !== false) return 6;
+    if (strpos($t, 'verification') !== false || strpos($t, 'back tracking') !== false || strpos($t, 'back tracing') !== false || strpos($t, 'tracking') !== false || strpos($t, 'tracing') !== false || strpos($t, 'pagberipika') !== false) return 8;
+    if (strpos($t, 'annotation') !== false || strpos($t, 'anotasyon') !== false) return 9;
+    if (strpos($t, 'ocular') !== false || strpos($t, 'inspeksyon') !== false) return 10;
+    if (strpos($t, 'cancellation of td') !== false || (strpos($t, 'cancellation') !== false && strpos($t, 'td') !== false) || (strpos($t, 'kanselasyon') !== false && strpos($t, 'td') !== false)) return 11;
+    if (strpos($t, 'tmcr') !== false || strpos($t, 'section map') !== false || strpos($t, 'map') !== false) return 12;
+    if (strpos($t, 'posting') !== false || strpos($t, 'pag-post') !== false) return 13;
     return 7;
 }
 
@@ -2938,19 +2942,21 @@ for ($m = 1; $m <= 12; $m++) {
 
     function mapService(trans) {
         const t = String(trans || '').toLowerCase().trim();
-        if (t.includes('transfer')) return 1;
-        if (t.includes('subdivision') || t.includes('consolidation')) return 2;
-        if (t.includes('agri to urban')) return 3;
-        if (t.includes('urban to urban')) return 4;
-        if (t.includes('reassessment') || t.includes('dp') || t.includes('pc')) return 5;
-        if (t.includes('discovery') || t.includes('declaration')) return 6;
-        if (t.includes('certification') || t.includes('ctc') || t.includes('cpc') || t.includes('photocopy') || t.includes('certificate')) return 7;
-        if (t.includes('verification') || t.includes('back') || t.includes('tracking') || t.includes('tracing')) return 8;
-        if (t.includes('annotation')) return 9;
-        if (t.includes('ocular')) return 10;
-        if (t.includes('cancellation of td')) return 11;
-        if (t.includes('tmcr') || t.includes('map')) return 12;
-        if (t.includes('posting')) return 13;
+        if (!t) return 7;
+        if (t.includes('transfer') || t.includes('paglilipat') || t.includes('lipat')) return 1;
+        if (t.includes('subdivision') || t.includes('consolidation') || t.includes('paghati')) return 2;
+        if (t.includes('agri to urban') || t.includes('agrikultural')) return 3;
+        if (t.includes('urban to urban') || (t.includes('reclassification') && !t.includes('agri'))) return 4;
+        // Check Certification (7) BEFORE Reassessment (5) to avoid acronym collision (e.g. CPC containing 'pc')
+        if (t.includes('certification') || t.includes('ctc') || t.includes('cpc') || t.includes('photocopy') || t.includes('certificate') || t.includes('sertipikasyon')) return 7;
+        if (t.includes('reassessment') || t.includes('dp/pc/dt') || t.includes('dp / pc / dt') || /\b(dp|pc|dt)\b/i.test(t) || t.includes('tasasyon')) return 5;
+        if (t.includes('discovery') || t.includes('new declaration') || t.includes('bagong deklarasyon')) return 6;
+        if (t.includes('verification') || t.includes('back tracking') || t.includes('back tracing') || t.includes('tracking') || t.includes('tracing') || t.includes('pagberipika')) return 8;
+        if (t.includes('annotation') || t.includes('anotasyon')) return 9;
+        if (t.includes('ocular') || t.includes('inspeksyon')) return 10;
+        if (t.includes('cancellation of td') || (t.includes('cancellation') && t.includes('td')) || (t.includes('kanselasyon') && t.includes('td'))) return 11;
+        if (t.includes('tmcr') || t.includes('section map') || t.includes('map')) return 12;
+        if (t.includes('posting') || t.includes('pag-post')) return 13;
         return 7;
     }
 
@@ -3014,6 +3020,20 @@ for ($m = 1; $m <= 12; $m++) {
             'CC1', 'CC2', 'CC3', 'SQD0', 'SQD1', 'SQD2', 'SQD3', 'SQD4', 'SQD5', 'SQD6', 'SQD7', 'SQD8', 'Suggestions/Comments'
         ];
 
+        const totalCnt = sorted.length;
+        const tallyServ = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0, 11:0, 12:0, 13:0};
+        const tallyClient = {1:0, 2:0, 3:0, 4:0};
+        const tallyGender = {1:0, 2:0, 3:0};
+        const tallyAge = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
+        const tallyCc1 = {1:0, 2:0, 3:0, 4:0};
+        const tallyCc2 = {1:0, 2:0, 3:0, 4:0, 5:0};
+        const tallyCc3 = {1:0, 2:0, 3:0, 4:0};
+        const sqdKeys = ['sqd0', 'sqd1', 'sqd2', 'sqd3', 'sqd4', 'sqd5', 'sqd6', 'sqd7', 'sqd8'];
+        const tallySqd = {};
+        sqdKeys.forEach(k => {
+            tallySqd[k] = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
+        });
+
         const dataRows = [];
         const csvRows = [dataOnlyHeaders];
 
@@ -3026,6 +3046,27 @@ for ($m = 1; $m <= 12; $m++) {
                 if (dp.length === 3) dateDay = parseInt(dp[2], 10) || 1;
             }
 
+            const cCode = mapClient(r.client_type);
+            const gCode = mapGender(r.gender);
+            const aCode = mapAge(r.age_group);
+            const sCode = mapService(r.transaction_type);
+            const cc1Code = mapCc1(r.cc1);
+            const cc2Code = mapCc2(r.cc2);
+            const cc3Code = mapCc3(r.cc3);
+
+            if (tallyClient[cCode] !== undefined) tallyClient[cCode]++;
+            if (tallyGender[gCode] !== undefined) tallyGender[gCode]++;
+            if (tallyAge[aCode] !== undefined) tallyAge[aCode]++;
+            if (tallyServ[sCode] !== undefined) tallyServ[sCode]++;
+            if (tallyCc1[cc1Code] !== undefined) tallyCc1[cc1Code]++;
+            if (tallyCc2[cc2Code] !== undefined) tallyCc2[cc2Code]++;
+            if (tallyCc3[cc3Code] !== undefined) tallyCc3[cc3Code]++;
+
+            sqdKeys.forEach(sk => {
+                const sc = mapSqd(r[sk]);
+                if (tallySqd[sk] && tallySqd[sk][sc] !== undefined) tallySqd[sk][sc]++;
+            });
+
             const comments = (r.suggestions || '').replace(/[\r\n\t]+/g, ' ').trim();
 
             const row = [
@@ -3036,14 +3077,14 @@ for ($m = 1; $m <= 12; $m++) {
                 seq,
                 '',
                 '1',
-                mapClient(r.client_type),
-                mapGender(r.gender),
-                mapAge(r.age_group),
+                cCode,
+                gCode,
+                aCode,
                 '',
-                mapService(r.transaction_type),
-                mapCc1(r.cc1),
-                mapCc2(r.cc2),
-                mapCc3(r.cc3),
+                sCode,
+                cc1Code,
+                cc2Code,
+                cc3Code,
                 mapSqd(r.sqd0),
                 mapSqd(r.sqd1),
                 mapSqd(r.sqd2),
@@ -3058,6 +3099,127 @@ for ($m = 1; $m <= 12; $m++) {
             dataRows.push(row);
             csvRows.push(row);
         });
+
+        const summaryRows = [
+            ['Internal or External', '', ''],
+            ['1', 'External', totalCnt],
+            ['2', 'Internal', 0],
+            ['', '', ''],
+            ['Uri ng Kliyente', '', ''],
+            ['1', 'Citizen/Mamayan', tallyClient[1]],
+            ['2', 'Business/Negosyo', tallyClient[2]],
+            ['3', 'Government/Gobyerno', tallyClient[3]],
+            ['4', 'Did not specify', tallyClient[4]],
+            ['', 'TOTAL', totalCnt],
+            ['', '', ''],
+            ['Kasarian', '', ''],
+            ['1', 'Lalaki', tallyGender[1]],
+            ['2', 'Babae', tallyGender[2]],
+            ['3', 'Did not specify', tallyGender[3]],
+            ['', 'TOTAL', totalCnt],
+            ['', '', ''],
+            ['Edad', '', ''],
+            ['1', '19 or lower', tallyAge[1]],
+            ['2', '20-34', tallyAge[2]],
+            ['3', '35-49', tallyAge[3]],
+            ['4', '50-64', tallyAge[4]],
+            ['5', '65 or higher', tallyAge[5]],
+            ['6', 'Did not specify', tallyAge[6]],
+            ['', 'TOTAL', totalCnt],
+            ['', '', ''],
+            ['Services Availed', '', ''],
+            ['1', 'TR', tallyServ[1]],
+            ['2', 'SD / CS', tallyServ[2]],
+            ['3', 'RC (Agri to Urban)', tallyServ[3]],
+            ['4', 'RC (Urban to Urban)', tallyServ[4]],
+            ['5', 'DP / PC / DT', tallyServ[5]],
+            ['6', 'DC', tallyServ[6]],
+            ['7', 'Certification / Certified Photocopy / Certified True Copy', tallyServ[7]],
+            ['8', 'Verification / Back Tracing', tallyServ[8]],
+            ['9', 'Annotation / Cancellation of Annotation', tallyServ[9]],
+            ['10', 'Ocular Inspection', tallyServ[10]],
+            ['11', 'Cancellation of TD', tallyServ[11]],
+            ['12', 'TMCR/Section Map/s', tallyServ[12]],
+            ['13', 'Posting', tallyServ[13]],
+            ['', 'TOTAL', totalCnt],
+            ['', '', ''],
+            ['CC1', '', ''],
+            ['1', "I know what a CC is and I saw this office's CC", tallyCc1[1]],
+            ['2', "I know what a CC but I did not not see this office's CC", tallyCc1[2]],
+            ['3', "I learned of the CC only when I saw this office's CC", tallyCc1[3]],
+            ['4', "I do not know what a CC is and I did not see this office's CC", tallyCc1[4]],
+            ['', 'TOTAL', totalCnt],
+            ['', '', ''],
+            ['CC2', '', ''],
+            ['1', "Easy to see", tallyCc2[1]],
+            ['2', "Somewhat easy to see", tallyCc2[2]],
+            ['3', "Difficukt to see", tallyCc2[3]],
+            ['4', "Not visible at all", tallyCc2[4]],
+            ['5', "N/A", tallyCc2[5]],
+            ['', 'TOTAL', totalCnt],
+            ['', '', ''],
+            ['CC3', '', ''],
+            ['1', "Helped very much", tallyCc3[1]],
+            ['2', "Somewhat helped", tallyCc3[2]],
+            ['3', "Did not helped", tallyCc3[3]],
+            ['4', "N/A", tallyCc3[4]],
+            ['', 'TOTAL', totalCnt]
+        ];
+
+        sqdKeys.forEach(sk => {
+            summaryRows.push(['', '', '']);
+            summaryRows.push([sk.toUpperCase(), '', '']);
+            summaryRows.push(['1', 'Strongly Disagree', tallySqd[sk][1]]);
+            summaryRows.push(['2', 'Disagree', tallySqd[sk][2]]);
+            summaryRows.push(['3', 'Neither agree nor disagree', tallySqd[sk][3]]);
+            summaryRows.push(['4', 'Agree', tallySqd[sk][4]]);
+            summaryRows.push(['5', 'Strongly Agree', tallySqd[sk][5]]);
+            summaryRows.push(['6', 'Not Applicable', tallySqd[sk][6]]);
+            summaryRows.push(['', 'TOTAL', totalCnt]);
+        });
+
+        const make30Cols = (cells) => {
+            const row = new Array(30).fill('');
+            for (const [colIdx, val] of Object.entries(cells)) {
+                row[parseInt(colIdx, 10)] = String(val);
+            }
+            return row;
+        };
+
+        const topRows = [
+            make30Cols({12: 'Services Availed', 20: 'Edad'}),
+            make30Cols({12: '1', 13: 'TR', 20: '1', 21: '19 or lower'}),
+            make30Cols({12: '2', 13: 'SD / CS', 20: '2', 21: '20-34'}),
+            make30Cols({12: '3', 13: 'RC (Agri to Urban)', 20: '3', 21: '35-49'}),
+            make30Cols({12: '4', 13: 'RC (Urban to Urban)', 20: '4', 21: '50-64'}),
+            make30Cols({12: '5', 13: 'DP / PC / DT', 20: '5', 21: '65 or higher'}),
+            make30Cols({12: '6', 13: 'DC', 20: '6', 21: 'did not specify'}),
+            make30Cols({12: '7', 13: 'Certification / Certified Photocopy / Certified True Copy'}),
+            make30Cols({12: '8', 13: 'Verification / Back Tracing'}),
+            make30Cols({12: '9', 13: 'Annotation / Cancellation of Annotation'}),
+            make30Cols({12: '10', 13: 'Ocular Inspection'}),
+            make30Cols({1: 'SUMMARY OF CSM', 12: 'CLIENT SATISFACTION MEASUREMENT (CSM)'}),
+            make30Cols({}),
+            [
+                '', 'DATA ENTRY SUMMARY', '', '', '',
+                'CSM Control No.', 'Internal or External', 'Month', 'Date', 'No.', '', 'Internal or External',
+                'Uri ng Kliyente', 'Kasarian', 'Edad', 'Rehiyon ng Tirahan', 'Services Availed',
+                'CC1', 'CC2', 'CC3', 'SQD0', 'SQD1', 'SQD2', 'SQD3', 'SQD4', 'SQD5', 'SQD6', 'SQD7', 'SQD8',
+                'Suggestions/Comments'
+            ]
+        ];
+
+        const fullRows = [...topRows];
+        const maxDataLen = Math.max(summaryRows.length, dataRows.length);
+        for (let i = 0; i < maxDataLen; i++) {
+            const s = summaryRows[i] || ['', '', ''];
+            const d = dataRows[i] || new Array(25).fill('');
+            fullRows.push(['', s[0], s[1], s[2], '', ...d]);
+        }
+
+        const tsvFull = fullRows.map(r => r.join("\t")).join("\r\n");
+        const summaryHeaders = ['Category / Code', 'Description', 'Total'];
+        const tsvSummaryOnly = [summaryHeaders.join("\t"), ...summaryRows.map(r => r.join("\t"))].join("\r\n");
 
         const dataOnlyLines = dataRows.map(r => r.join("\t"));
         const tsvDataOnly = dataOnlyLines.join("\r\n");
@@ -3077,10 +3239,10 @@ for ($m = 1; $m <= 12; $m++) {
             month: monthVal,
             month_label: monthFull,
             total_records: sorted.length,
-            tsv_full: tsvDataWithHeaders,
+            tsv_full: tsvFull,
             tsv_data_only: tsvDataOnly,
             tsv_data_with_headers: tsvDataWithHeaders,
-            tsv_summary_only: '',
+            tsv_summary_only: tsvSummaryOnly,
             csv_data_only: csvContent
         };
     }
