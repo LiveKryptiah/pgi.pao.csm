@@ -257,7 +257,11 @@ function norm_cc3($v) {
     return 0;
 }
 function norm_trans($v) {
-    $t = strtolower(trim((string)$v));
+    $s = trim((string)$v);
+    if (is_numeric($s) && (int)$s >= 1 && (int)$s <= 13 && (string)(int)$s === $s) {
+        return (int)$s;
+    }
+    $t = strtolower($s);
     if ($t === '') return 0;
     if (strpos($t, 'transfer') !== false || strpos($t, 'paglilipat') !== false || strpos($t, 'lipat') !== false) return 1;
     if (strpos($t, 'subdivision') !== false || strpos($t, 'consolidation') !== false || strpos($t, 'paghati') !== false) return 2;

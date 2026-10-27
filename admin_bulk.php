@@ -2,6 +2,12 @@
 // Start output buffering immediately so no warning or whitespace breaks JSON responses
 ob_start();
 
+// Prevent browser from caching dynamic scripts and stale normalizers
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
+header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
+
 // ==========================================
 // CONFIGURATION & ERROR HANDLING
 // ==========================================
@@ -187,7 +193,12 @@ function buildCsmExportData($pdo, $month) {
     };
 
     $map_service = function($trans) {
-        $t = strtolower(trim($trans ?? ''));
+        $s = trim((string)$trans);
+        // Explicit numeric check: return service index 1-13 immediately
+        if (is_numeric($s) && (int)$s >= 1 && (int)$s <= 13 && (string)(int)$s === $s) {
+            return (int)$s;
+        }
+        $t = strtolower($s);
         if ($t === '') return 7;
         if (strpos($t, 'transfer') !== false || strpos($t, 'paglilipat') !== false || strpos($t, 'lipat') !== false) return 1;
         if (strpos($t, 'subdivision') !== false || strpos($t, 'consolidation') !== false || strpos($t, 'paghati') !== false) return 2;
@@ -495,6 +506,33 @@ function buildCsmExportData($pdo, $month) {
     $csv_full = stream_get_contents($csv_full_buffer);
     fclose($csv_full_buffer);
 
+    // Pure 13 quota digits for pasting into summary table cells D42:D54 / M2:M14
+    $quota_numbers = [];
+    $quota_table_lines = ["Service Code\tService Name\tTotal Transactions"];
+    $svc_short_names = [
+        1 => 'TR',
+        2 => 'SD / CS',
+        3 => 'RC (Agri to Urban)',
+        4 => 'RC (Urban to Urban)',
+        5 => 'DP / PC / DT',
+        6 => 'DC',
+        7 => 'Certification / Certified Photocopy / Certified True Copy',
+        8 => 'Verification / Back Tracing',
+        9 => 'Annotation / Cancellation of Annotation',
+        10 => 'Ocular Inspection',
+        11 => 'Cancellation of TD',
+        12 => 'TMCR/Section Map/s',
+        13 => 'Posting'
+    ];
+    for ($i = 1; $i <= 13; $i++) {
+        $c = $tally_serv[$i] ?? 0;
+        $quota_numbers[] = $c;
+        $quota_table_lines[] = "{$i}\t{$svc_short_names[$i]}\t{$c}";
+    }
+    $quota_table_lines[] = "\tTOTAL\t{$total_cnt}";
+    $tsv_quotas_only = implode("\r\n", $quota_numbers);
+    $tsv_quotas_table = implode("\r\n", $quota_table_lines);
+
     return [
         'month'                 => $month,
         'month_label'           => $month_full,
@@ -503,6 +541,8 @@ function buildCsmExportData($pdo, $month) {
         'tsv_data_only'         => $tsv_data_only,
         'tsv_data_with_headers' => $tsv_data_with_headers,
         'tsv_summary_only'      => $tsv_summary_only,
+        'tsv_quotas_only'       => $tsv_quotas_only,
+        'tsv_quotas_table'      => $tsv_quotas_table,
         'csv_full'              => $csv_full,
         'csv_data_only'         => $csv_data_only
     ];
@@ -544,7 +584,9 @@ if (isset($_GET['action']) && in_array($_GET['action'], ['get_csm_export', 'down
             'tsv_full'              => $export_data['tsv_full'],
             'tsv_data_only'         => $export_data['tsv_data_only'],
             'tsv_data_with_headers' => $export_data['tsv_data_with_headers'],
-            'tsv_summary_only'      => $export_data['tsv_summary_only']
+            'tsv_summary_only'      => $export_data['tsv_summary_only'],
+            'tsv_quotas_only'       => $export_data['tsv_quotas_only'],
+            'tsv_quotas_table'      => $export_data['tsv_quotas_table']
         ], JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     } catch (Throwable $e) {
@@ -1065,7 +1107,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['bulk_json']) || iss
 
 // Normalizer for transaction types to service indices 1-13
 function norm_trans_php($v) {
-    $t = strtolower(trim((string)$v));
+    $s = trim((string)$v);
+    // Explicit numeric check: return service index 1-13 immediately
+    if (is_numeric($s) && (int)$s >= 1 && (int)$s <= 13 && (string)(int)$s === $s) {
+        return (int)$s;
+    }
+    $t = strtolower($s);
     if ($t === '') return 7;
     if (strpos($t, 'transfer') !== false || strpos($t, 'paglilipat') !== false || strpos($t, 'lipat') !== false) return 1;
     if (strpos($t, 'subdivision') !== false || strpos($t, 'consolidation') !== false || strpos($t, 'paghati') !== false) return 2;
@@ -1988,7 +2035,8 @@ for ($m = 1; $m <= 12; $m++) {
                     </div>
 
                     <?php
-                    $renderSvcCard = function($idx, $s) {
+                    $renderSvcCard = function($idx, $s) use ($db_saved_quotas) {
+                        $initialVal = isset($db_saved_quotas[$idx]) ? (int)$db_saved_quotas[$idx] : 0;
                     ?>
                         <div class="p-2.5 rounded-3 border bg-white d-flex align-items-center justify-content-between gap-2 shadow-xs svc-card-row">
                             <div class="d-flex align-items-center gap-2.5 text-truncate" style="min-width: 0;">
@@ -2007,7 +2055,7 @@ for ($m = 1; $m <= 12; $m++) {
                             <div class="d-flex align-items-center gap-2 flex-shrink-0">
                                 <div class="input-group input-group-sm" style="width: 140px;">
                                     <button type="button" class="btn btn-outline-secondary px-2 fw-bold" onclick="stepSvcInput(<?= $idx ?>, -10)" title="Subtract 10">-</button>
-                                    <input type="number" min="0" max="5000" class="form-control text-center fw-bold svc-quota-input" id="svcQuota_<?= $idx ?>" data-service-idx="<?= $idx ?>" data-service-name="<?= htmlspecialchars($s['name']) ?>" value="0" oninput="updateSvcTableTotal()">
+                                    <input type="number" min="0" max="5000" class="form-control text-center fw-bold svc-quota-input" id="svcQuota_<?= $idx ?>" data-service-idx="<?= $idx ?>" data-service-name="<?= htmlspecialchars($s['name']) ?>" value="<?= $initialVal ?>" oninput="updateSvcTableTotal()">
                                     <button type="button" class="btn btn-outline-secondary px-2 fw-bold" onclick="stepSvcInput(<?= $idx ?>, 10)" title="Add 10">+</button>
                                 </div>
                                 <span class="badge bg-light text-secondary border small svc-share-pct" id="svcShare_<?= $idx ?>" style="min-width: 44px; text-align: center;">0%</span>
@@ -2051,10 +2099,16 @@ for ($m = 1; $m <= 12; $m++) {
                         </div>
 
                         <div class="d-flex align-items-center gap-2 flex-wrap ms-auto">
-                            <!-- Action 1: Copy for Excel -->
+                            <!-- Action 1: Copy for Excel (25 Columns for cell F15) -->
                             <button type="button" class="btn btn-outline-success fw-semibold py-2 px-3 rounded-3 d-inline-flex align-items-center gap-2 shadow-xs" id="svcCopyExcelBtn" onclick="copyServiceTableData(this)" title="Generate responses and copy 25 columns for cell F15">
                                 <i class="ph-bold ph-copy fs-5"></i>
                                 <span>Copy for Excel</span>
+                            </button>
+
+                            <!-- Action 1b: Copy Quotas Only (Pure 1-13 digits for Excel summary D42:D54 / M2:M14) -->
+                            <button type="button" class="btn btn-outline-secondary fw-semibold py-2 px-3 rounded-3 d-inline-flex align-items-center gap-2 shadow-xs" id="svcCopyDigitsOnlyBtn" onclick="copyServiceTableQuotasOnly(this)" title="Copy pure 1-13 quota digits for Excel summary table (cells D42:D54 / M2:M14)">
+                                <i class="ph-bold ph-list-numbers fs-5"></i>
+                                <span>Copy Quota Digits</span>
                             </button>
 
                             <!-- Action 2: Save Quotas as Digits in Database -->
@@ -2701,6 +2755,11 @@ for ($m = 1; $m <= 12; $m++) {
                             <i class="ph-bold ph-chart-bar me-1"></i> Summary Tallies
                         </button>
                     </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link rounded-pill fw-semibold py-1.5 px-3 small" id="tab-quotas-btn" data-bs-toggle="pill" data-bs-target="#tab-quotas" type="button" role="tab" onclick="switchPreviewMode('quotas_only')">
+                            <i class="ph-bold ph-list-numbers me-1"></i> Quota Digits (1-13)
+                        </button>
+                    </li>
                 </ul>
 
                 <!-- Stats banner & Options -->
@@ -2941,6 +3000,12 @@ for ($m = 1; $m <= 12; $m++) {
     }
 
     function mapService(trans) {
+        if (trans !== null && trans !== undefined) {
+            const num = parseInt(trans, 10);
+            if (!isNaN(num) && num >= 1 && num <= 13 && String(num) === String(trans).trim()) {
+                return num;
+            }
+        }
         const t = String(trans || '').toLowerCase().trim();
         if (!t) return 7;
         if (t.includes('transfer') || t.includes('paglilipat') || t.includes('lipat')) return 1;
@@ -3049,7 +3114,9 @@ for ($m = 1; $m <= 12; $m++) {
             const cCode = mapClient(r.client_type);
             const gCode = mapGender(r.gender);
             const aCode = mapAge(r.age_group);
-            const sCode = mapService(r.transaction_type);
+            const sCode = (r.service_id && Number(r.service_id) >= 1 && Number(r.service_id) <= 13)
+                ? Number(r.service_id)
+                : mapService(r.transaction_type);
             const cc1Code = mapCc1(r.cc1);
             const cc2Code = mapCc2(r.cc2);
             const cc3Code = mapCc3(r.cc3);
@@ -3221,6 +3288,35 @@ for ($m = 1; $m <= 12; $m++) {
         const summaryHeaders = ['Category / Code', 'Description', 'Total'];
         const tsvSummaryOnly = [summaryHeaders.join("\t"), ...summaryRows.map(r => r.join("\t"))].join("\r\n");
 
+        // Pure 13 quota digits for pasting into summary table cells D42:D54 / M2:M14
+        const quotaLines = [];
+        for (let i = 1; i <= 13; i++) {
+            quotaLines.push(tallyServ[i] || 0);
+        }
+        const tsvQuotasOnly = quotaLines.join("\r\n");
+
+        const quotaTableLines = ['Service Code\tService Name\tTotal Transactions'];
+        const svcShortNames = {
+            1: 'TR',
+            2: 'SD / CS',
+            3: 'RC (Agri to Urban)',
+            4: 'RC (Urban to Urban)',
+            5: 'DP / PC / DT',
+            6: 'DC',
+            7: 'Certification / Certified Photocopy / Certified True Copy',
+            8: 'Verification / Back Tracing',
+            9: 'Annotation / Cancellation of Annotation',
+            10: 'Ocular Inspection',
+            11: 'Cancellation of TD',
+            12: 'TMCR/Section Map/s',
+            13: 'Posting'
+        };
+        for (let i = 1; i <= 13; i++) {
+            quotaTableLines.push(`${i}\t${svcShortNames[i]}\t${tallyServ[i] || 0}`);
+        }
+        quotaTableLines.push(`\tTOTAL\t${totalCnt}`);
+        const tsvQuotasTable = quotaTableLines.join("\r\n");
+
         const dataOnlyLines = dataRows.map(r => r.join("\t"));
         const tsvDataOnly = dataOnlyLines.join("\r\n");
         const tsvDataWithHeaders = [dataOnlyHeaders.join("\t"), ...dataOnlyLines].join("\r\n");
@@ -3243,6 +3339,8 @@ for ($m = 1; $m <= 12; $m++) {
             tsv_data_only: tsvDataOnly,
             tsv_data_with_headers: tsvDataWithHeaders,
             tsv_summary_only: tsvSummaryOnly,
+            tsv_quotas_only: tsvQuotasOnly,
+            tsv_quotas_table: tsvQuotasTable,
             csv_data_only: csvContent
         };
     }
@@ -3605,6 +3703,9 @@ for ($m = 1; $m <= 12; $m++) {
             txt = data.tsv_full;
         } else if (currentPreviewMode === 'summary_only') {
             txt = data.tsv_summary_only;
+        } else if (currentPreviewMode === 'quotas_only') {
+            const includeHeaders = $('#includeHeadersToggle').is(':checked');
+            txt = includeHeaders ? (data.tsv_quotas_table || data.tsv_quotas_only) : (data.tsv_quotas_only || data.tsv_summary_only);
         } else {
             const includeHeaders = $('#includeHeadersToggle').is(':checked');
             txt = includeHeaders ? (data.tsv_data_with_headers || data.tsv_data_only) : data.tsv_data_only;
@@ -3847,6 +3948,8 @@ for ($m = 1; $m <= 12; $m++) {
                 const sqd = generateSqdScores(sqdMode);
 
                 records.push({
+                    service_id:       q.idx,
+                    service_name:     q.name,
                     survey_date:      rDate,
                     client_type:      rClient,
                     gender:           rGender,
@@ -3925,6 +4028,53 @@ for ($m = 1; $m <= 12; $m++) {
             btn.disabled = false;
             btn.innerHTML = originalHtml;
         }, 600);
+    }
+
+    // Action 1b: Copy exact 13 service quota digits as a single column for Excel summary cells D42:D54 / M2:M14
+    async function copyServiceTableQuotasOnly(btn) {
+        const monthVal = $('#svcTableMonth').val();
+        if (!monthVal) {
+            alert('Please select a Target Month first.');
+            return;
+        }
+
+        const quotas = [];
+        let totalCount = 0;
+        for (let i = 1; i <= 13; i++) {
+            const val = parseInt($(`#svcQuota_${i}`).val(), 10) || 0;
+            quotas.push(val);
+            totalCount += val;
+        }
+
+        if (totalCount === 0) {
+            alert('Please enter at least one service quota count greater than 0.');
+            return;
+        }
+
+        const originalHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="ph-bold ph-spinner-gap spin fs-5"></i> <span>Copying Quotas...</span>`;
+        }
+
+        try {
+            // Pure vertical column of digits 1-13 matching cells D42:D54
+            const textToCopy = quotas.join("\r\n");
+            await copyToClipboard(textToCopy);
+            showCopyToast(
+                'Copied Quota Digits (1-13)!',
+                `13 numeric counts (Total: ${totalCount.toLocaleString()}) ready to paste into Excel cells D42:D54.`
+            );
+        } catch (err) {
+            alert('Could not copy quotas: ' + err.message);
+        } finally {
+            if (btn) {
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }, 600);
+            }
+        }
     }
 
     function printServiceTableReport(btn) {
@@ -4320,6 +4470,7 @@ for ($m = 1; $m <= 12; $m++) {
             });
             const data = await res.json();
             if (data.status === 'success') {
+                savedMonthlyServiceBreakdowns[monthVal] = {...quotas};
                 showCopyToast(
                     'Quotas Saved',
                     `Stored ${totalCount.toLocaleString()} total transactions for ${monthVal}.`
@@ -4341,8 +4492,20 @@ for ($m = 1; $m <= 12; $m++) {
         }
     }
 
-    // Initialize on page load
+    const savedMonthlyServiceBreakdowns = <?= json_encode($monthly_service_breakdowns, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+
+    // Initialize on page load and handle month switching
     $(document).ready(function() {
+        $('#svcTableMonth').on('change', function() {
+            const ym = $(this).val();
+            if (!ym) return;
+            const saved = savedMonthlyServiceBreakdowns[ym] || {};
+            for (let i = 1; i <= 13; i++) {
+                $(`#svcQuota_${i}`).val(saved[i] !== undefined ? saved[i] : 0);
+            }
+            updateSvcTableTotal();
+        });
+
         updateSvcTableTotal();
         recalcMonthTableAnnualTotal();
     });
