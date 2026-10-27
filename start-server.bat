@@ -1,5 +1,5 @@
 @echo off
-title CSM Local Server
+title CSM Local Server (Office LAN)
 echo ========================================================
 echo   CSM (Client Satisfaction Measurement) - Isabela
 echo   Provincial Assessor's Office
@@ -25,16 +25,40 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo Starting PHP built-in web server on http://localhost:8000...
+echo ========================================================
+echo   OFFICE NETWORK CONNECTIONS FOR CO-WORKERS
+echo ========================================================
+echo   Your PC has two office network connections:
 echo.
-echo Available URLs:
-echo   - Survey Portal:  http://localhost:8000/index.php
-echo   - Admin Login:    http://localhost:8000/login.php
-echo   - Diagnostics:    http://localhost:8000/diagnose.php
+echo   [CONNECTION 1 - Primary]:
+echo     http://192.168.1.225:8000/index.php
+echo.
+echo   [CONNECTION 2 - 2nd Office Subnet (Fastest Fix for co-workers)]:
+echo     http://192.168.4.210:8000/index.php
+echo.
+echo   [ADMIN LOGIN]:
+echo     http://192.168.1.225:8000/login.php
+echo.
+echo   [LOCAL HOST]:
+echo     http://localhost:8000/index.php
+echo.
+echo   [DIAGNOSTICS ^& LAN HUB]:
+echo     http://localhost:8000/diagnose.php
+echo ========================================================
+echo   CO-WORKER TROUBLESHOOTING:
+echo   - Solution 1: If 192.168.1.225 fails, have them open:
+echo                 http://192.168.4.210:8000/index.php
+echo   - Solution 2: Verify co-worker is on the same office Wi-Fi
+echo                 (No Guest Wi-Fi / mobile hotspot)
+echo   - Solution 3: In Windows Settings, set network to Private
+echo ========================================================
+echo.
+echo Starting PHP built-in web server on 0.0.0.0:8000...
+echo (Binding to 0.0.0.0 allows all office computers to connect)
 echo.
 echo Press Ctrl+C in this window to stop the server.
 echo ========================================================
 
 start "" http://localhost:8000/index.php
-php -S localhost:8000
+php -S 0.0.0.0:8000
 pause

@@ -1790,6 +1790,9 @@ for ($m = 1; $m <= 12; $m++) {
     <a href="index.php" target="_blank" class="nav-link">
         <i class="ph-bold ph-arrow-square-out"></i> Live Survey Form
     </a>
+    <a href="#" class="nav-link" data-bs-toggle="modal" data-bs-target="#lanShareModal">
+        <i class="ph-bold ph-broadcast"></i> Office Network &amp; LAN
+    </a>
 
     <!-- Footer User Session -->
     <div class="mt-auto pt-3 border-top d-flex align-items-center justify-content-between px-2">
@@ -1828,6 +1831,11 @@ for ($m = 1; $m <= 12; $m++) {
             <button type="button" class="theme-toggle-btn" title="Toggle Dark/Light Mode" aria-label="Toggle theme">
                 <i class="ph-bold ph-moon fs-5 theme-icon-moon"></i>
                 <i class="ph-bold ph-sun fs-5 theme-icon-sun d-none"></i>
+            </button>
+
+            <!-- Office Network / LAN Share Modal Button -->
+            <button type="button" class="btn-modern-outline d-inline-flex align-items-center gap-1.5" data-bs-toggle="modal" data-bs-target="#lanShareModal" title="Share Survey Form with Office Co-workers">
+                <i class="ph-bold ph-broadcast text-success"></i> <span class="d-none d-md-inline">Office Network</span>
             </button>
 
             <a href="dashboard.php" class="btn-modern-outline">
@@ -4187,5 +4195,6 @@ for ($m = 1; $m <= 12; $m++) {
     }
 </script>
 <script src="darkmode.js"></script>
+<?php include 'lan_share_modal.php'; ?>
 </body>
 </html>
