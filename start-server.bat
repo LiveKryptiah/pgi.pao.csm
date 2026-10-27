@@ -1,24 +1,31 @@
 @echo off
+cd /d "%~dp0"
 title CSM Local Server (Office LAN)
+
 echo ========================================================
 echo   CSM (Client Satisfaction Measurement) - Isabela
 echo   Provincial Assessor's Office
 echo ========================================================
 echo.
 
+echo Checking and freeing port 8000...
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8000 ^| findstr LISTENING') do taskkill /f /pid %%a >nul 2>&1
+
 :: Check if MySQL/MariaDB is listening on port 3306
 netstat -ano | findstr :3306 | findstr LISTENING >nul
 if %errorlevel% neq 0 (
-    echo [INFO] MySQL is not running on port 3306.
-    echo [INFO] Starting local MySQL server from C:\Users\user\mysql8...
-    powershell -WindowStyle Hidden -Command "Start-Process 'C:\Users\user\mysql8\bin\mysqld.exe' -WorkingDirectory 'C:\Users\user\mysql8' -WindowStyle Hidden"
-    timeout /t 3 /nobreak >nul
-    netstat -ano | findstr :3306 | findstr LISTENING >nul
-    if %errorlevel% neq 0 (
-        echo [ERROR] Could not start MySQL automatically.
-        echo Please ensure C:\Users\user\mysql8\bin\mysqld.exe can be started.
+    if exist "C:\Users\user\mysql8\bin\mysqld.exe" (
+        echo [INFO] Starting local MySQL server on port 3306...
+        powershell -WindowStyle Hidden -Command "Start-Process 'C:\Users\user\mysql8\bin\mysqld.exe' -WorkingDirectory 'C:\Users\user\mysql8' -WindowStyle Hidden"
+        timeout /t 3 /nobreak >nul
+        netstat -ano | findstr :3306 | findstr LISTENING >nul
+        if %errorlevel% neq 0 (
+            echo [INFO] Local MySQL not active; using Neon Cloud PostgreSQL database.
+        ) else (
+            echo [OK] Local MySQL started on port 3306.
+        )
     ) else (
-        echo [OK] MySQL started successfully on port 3306.
+        echo [OK] Using Neon Cloud PostgreSQL database.
     )
 ) else (
     echo [OK] MySQL is already active on port 3306.
